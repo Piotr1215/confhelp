@@ -84,10 +84,13 @@ myfunc() {
         assert results[0].key == "myfunc"
         assert results[0].desc == "(function)"
 
-    def test_parse_abbrev_block(self, temp_dir):
+    def test_parse_abbrev_regex(self, temp_dir):
         config = {
             "type": "abbr",
-            "mode": "abbrev_block",
+            "match_line": '".*"',
+            "regex": r'"([^"]+)"\s+\'([^\']+)\'',
+            "key_group": 1,
+            "desc_group": 2,
         }
         abbrevs = temp_dir / ".zsh_abbreviations"
         abbrevs.write_text("""

@@ -41,15 +41,6 @@ def parse_file(path: Path, cfg: dict, rel_path: Optional[str] = None) -> list[Bi
     lines = content.splitlines()
     fname = rel_path if rel_path else path.name
 
-    # Special mode for abbreviations block
-    if cfg.get("mode") == "abbrev_block":
-        match = re.search(r'abbrevs=\((.*?)\)', content, re.DOTALL)
-        if match:
-            pairs = re.findall(r'"([^"]+)"\s+\'([^\']+)\'', match.group(1))
-            for key, val in pairs:
-                results.append(Binding(cfg["type"], key, val, fname, 1))
-        return results
-
     regex = re.compile(cfg["regex"])
     match_line = cfg.get("match_line")
     skip_comment = cfg.get("skip_comment", False)

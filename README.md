@@ -88,7 +88,10 @@ strip_quotes = true
 
 [abbrev]
 paths = [".zsh_abbreviations"]
-mode = "abbrev_block"
+match_line = '".*"'
+regex = '''"([^"]+)"\s+'([^']+)''''
+key_group = 1
+desc_group = 2
 type = "abbrev"
 
 [nvim]
@@ -114,7 +117,6 @@ type = "nvim"
 | `strip_quotes` | Remove surrounding quotes from desc |
 | `desc_literal` | Use fixed string as description |
 | `desc_from_comment` | Extract desc from trailing `# comment` |
-| `mode` | Special modes: `abbrev_block` for zsh abbreviations |
 
 ## Output Formats
 
