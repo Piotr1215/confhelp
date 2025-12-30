@@ -144,7 +144,19 @@ def main():
                              capture_output=True, text=True)
         formatted = proc.stdout.strip().split("\n")
 
-        selection = iterfzf(formatted, exact=True)
+        try:
+            selection = iterfzf(
+                formatted,
+                exact=True,
+                bind={
+                    "ctrl-p": "half-page-up",
+                    "ctrl-n": "half-page-down",
+                    "page-up": "half-page-up",
+                    "page-down": "half-page-down",
+                }
+            )
+        except KeyboardInterrupt:
+            sys.exit(130)
         if not selection:
             sys.exit(1)
 
