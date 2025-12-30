@@ -1,6 +1,7 @@
 """CLI - parse and optionally select bindings with fzf."""
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -9,14 +10,31 @@ from iterfzf import iterfzf
 
 from .parser import parse_all
 
+def get_default_config_paths() -> list[Path]:
+    paths = []
+    xdg_config = os.environ.get("XDG_CONFIG_HOME")
+    if xdg_config:
+        paths.append(Path(xdg_config) / "confhelp/config.toml")
+    paths.append(Path.home() / ".config/confhelp/config.toml")
+    paths.append(Path.home() / ".confhelp.toml")
+    return paths
+
+
+def find_config() -> Path | None:
+    for p in get_default_config_paths():
+        if p.exists():
+            return p
+    return None
+
 
 def main():
+    default_config = find_config()
     parser = argparse.ArgumentParser(
         description="Parse keybindings from config files",
-        epilog="Example: confhelp -c config.toml -b ~/dotfiles"
+        epilog="Example: confhelp -b ~/dotfiles"
     )
-    parser.add_argument("--config", "-c", type=Path, required=True,
-                       help="Parser config TOML file")
+    parser.add_argument("--config", "-c", type=Path, default=default_config,
+                       help="Parser config TOML file (default: ~/.config/confhelp/config.toml)")
     parser.add_argument("--base-dir", "-b", type=Path, required=True,
                        help="Base directory for config files")
     parser.add_argument("--format", "-f", choices=["pipe", "tsv", "json"], default="pipe",
@@ -26,6 +44,14 @@ def main():
     parser.add_argument("--edit", "-e", action="store_true",
                        help="Open selected binding in $EDITOR (implies --select)")
     args = parser.parse_args()
+
+    if not args.config:
+        paths = get_default_config_paths()
+        print(f"Error: No config file found. Looked in:", file=sys.stderr)
+        for p in paths:
+            print(f"  - {p}", file=sys.stderr)
+        print("Use -c to specify a config file.", file=sys.stderr)
+        sys.exit(1)
 
     bindings = parse_all(args.config, args.base_dir)
 
@@ -47,7 +73,6 @@ def main():
         path = args.base_dir / fname
 
         if args.edit:
-            import os
             editor = os.environ.get("EDITOR", "vim")
             subprocess.run([editor, f"+{line}", str(path)])
         else:

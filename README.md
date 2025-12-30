@@ -24,17 +24,20 @@ pip install confhelp
 ## Usage
 
 ```bash
-# Output all bindings
-confhelp -c config.toml -b ~/dotfiles
+# Output all bindings (uses ~/.config/confhelp/config.toml)
+confhelp -b ~/dotfiles
 
 # Interactive fzf selection
-confhelp -c config.toml -b ~/dotfiles --select
+confhelp -b ~/dotfiles --select
 
 # Select and open in $EDITOR at line
-confhelp -c config.toml -b ~/dotfiles --edit
+confhelp -b ~/dotfiles --edit
 
 # JSON output
-confhelp -c config.toml -b ~/dotfiles -f json
+confhelp -b ~/dotfiles -f json
+
+# Custom config
+confhelp -c /path/to/config.toml -b ~/dotfiles
 ```
 
 Example output:
@@ -108,7 +111,7 @@ The pipe format works well with `column -t -s'|'` for aligned display.
 Spawn a centered popup window showing bindings. Enter jumps to the file:
 
 ```bash
-selection=$(confhelp -c config.toml -b ~/dotfiles | column -t -s'|' | fzf)
+selection=$(confhelp -b ~/dotfiles | column -t -s'|' | fzf)
 # parse selection, open in editor
 ```
 
@@ -117,7 +120,7 @@ See `examples/alacritty-popup.sh` for a complete implementation.
 ### tmux Popup
 
 ```bash
-tmux display-popup -w 80% -h 80% -E 'confhelp -c config.toml -b ~/dotfiles --select'
+tmux display-popup -w 80% -h 80% -E 'confhelp -b ~/dotfiles --select'
 ```
 
 See `examples/tmux-popup.sh` for a complete implementation.
@@ -125,7 +128,7 @@ See `examples/tmux-popup.sh` for a complete implementation.
 ### Rofi/dmenu
 
 ```bash
-confhelp -c config.toml -b ~/dotfiles | rofi -dmenu
+confhelp -b ~/dotfiles | rofi -dmenu
 ```
 
 ## Acknowledgments
