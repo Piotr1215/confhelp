@@ -90,13 +90,21 @@ strip_quotes = true
 paths = [".zsh_abbreviations"]
 mode = "abbrev_block"
 type = "abbrev"
+
+[nvim]
+paths = [".config/nvim/lua/**/*.lua"]  # glob pattern
+match_line = "vim.keymap.set"
+regex = 'vim\.keymap\.set\([^,]+,\s*"([^"]+)".*desc\s*=\s*"([^"]+)"'
+key_group = 1
+desc_group = 2
+type = "nvim"
 ```
 
 ### Config Options
 
 | Option | Description |
 |--------|-------------|
-| `paths` | List of files to parse (relative to base-dir) |
+| `paths` | List of files or glob patterns (e.g., `**/*.lua`) |
 | `regex` | Pattern with capture groups for key/desc |
 | `key_group` | Capture group number for the key |
 | `desc_group` | Capture group number for description |

@@ -107,8 +107,16 @@ def parse_all(config_path: Path, base_dir: Path) -> list[Binding]:
         if not isinstance(cfg, dict):
             continue
         for rel_path in cfg.get("paths", []):
-            path = base_dir / rel_path
-            results = parse_file(path, cfg, rel_path)
-            all_results.extend(results)
+            # Support glob patterns
+            if "*" in rel_path:
+                for path in base_dir.glob(rel_path):
+                    if path.is_file():
+                        file_rel = str(path.relative_to(base_dir))
+                        results = parse_file(path, cfg, file_rel)
+                        all_results.extend(results)
+            else:
+                path = base_dir / rel_path
+                results = parse_file(path, cfg, rel_path)
+                all_results.extend(results)
 
     return all_results
