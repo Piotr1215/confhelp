@@ -4,10 +4,9 @@ set -eo pipefail
 # Example: tmux popup for confhelp
 # Shows bindings in a tmux popup, opens selection in $EDITOR
 
-CONFIG="$HOME/.config/confhelp/config.toml"
 DOTFILES="$HOME/dotfiles"
 
-selection=$(confhelp -c "$CONFIG" -b "$DOTFILES" | column -t -s'|' | fzf \
+selection=$(confhelp -b "$DOTFILES" | column -t -s'|' | fzf \
     --header='Enter=jump to file' \
     --height=100% \
     --layout=reverse \
