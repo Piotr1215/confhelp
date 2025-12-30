@@ -103,6 +103,9 @@ def parse_all(config_path: Path, base_dir: Path) -> list[Binding]:
     all_results = []
 
     for name, cfg in config.items():
+        # Skip non-parser entries (e.g., base_dirs)
+        if not isinstance(cfg, dict):
+            continue
         for rel_path in cfg.get("paths", []):
             path = base_dir / rel_path
             results = parse_file(path, cfg, rel_path)

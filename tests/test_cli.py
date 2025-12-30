@@ -131,3 +131,73 @@ class TestCLI:
             finally:
                 if old_home:
                     os.environ["HOME"] = old_home
+
+    def test_base_dirs_from_config(self):
+        """base_dirs can be set in config file."""
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d)
+
+            # Create config with base_dirs
+            config = base / "config.toml"
+            dotfiles = base / "dotfiles"
+            dotfiles.mkdir()
+
+            config.write_text(f'''
+base_dirs = ["{dotfiles}"]
+
+[tmux]
+paths = [".tmux.conf"]
+match_line = "^bind"
+regex = 'bind\\s+(\\S+)(.*)'
+key_group = 1
+desc_group = 2
+type = "tmux"
+''')
+
+            # Create dotfile
+            (dotfiles / ".tmux.conf").write_text("bind r reload")
+
+            # Run without -b flag
+            result = subprocess.run(
+                ["confhelp", "-c", str(config)],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0
+            assert "[tmux]|r|" in result.stdout
+
+    def test_multiple_base_dirs(self):
+        """Multiple base_dirs are all parsed."""
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d)
+
+            # Create two dotfile directories
+            dotfiles1 = base / "dotfiles1"
+            dotfiles2 = base / "dotfiles2"
+            dotfiles1.mkdir()
+            dotfiles2.mkdir()
+
+            config = base / "config.toml"
+            config.write_text(f'''
+base_dirs = ["{dotfiles1}", "{dotfiles2}"]
+
+[tmux]
+paths = [".tmux.conf"]
+regex = 'bind\\s+(\\S+)'
+key_group = 1
+type = "tmux"
+''')
+
+            (dotfiles1 / ".tmux.conf").write_text("bind a action1")
+            (dotfiles2 / ".tmux.conf").write_text("bind b action2")
+
+            result = subprocess.run(
+                ["confhelp", "-c", str(config)],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0
+            assert "[tmux]|a|" in result.stdout
+            assert "[tmux]|b|" in result.stdout

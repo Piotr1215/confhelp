@@ -35,20 +35,20 @@ pip install confhelp
 ## Usage
 
 ```bash
-# Output all bindings (uses ~/.config/confhelp/config.toml)
-confhelp -b ~/dotfiles
+# Output all bindings (uses base_dirs from config)
+confhelp
 
 # Interactive fzf selection
-confhelp -b ~/dotfiles --select
+confhelp --select
 
 # Select and open in $EDITOR at line
-confhelp -b ~/dotfiles --edit
+confhelp --edit
 
 # JSON output
-confhelp -b ~/dotfiles -f json
+confhelp -f json
 
-# Custom config
-confhelp -c /path/to/config.toml -b ~/dotfiles
+# Override base directory
+confhelp -b ~/other-dotfiles
 ```
 
 Example output:
@@ -66,6 +66,9 @@ The `--edit` flag drops you directly into the file at the exact line. Change the
 Define parsers in TOML. Each section describes how to extract bindings from a set of files:
 
 ```toml
+# Default directories to search (no -b needed)
+base_dirs = ["~/dotfiles", "~/work-dotfiles"]
+
 [tmux]
 paths = [".tmux.conf"]
 match_line = "^bind"
