@@ -96,7 +96,7 @@ type = "abbrev"
 
 ## Output Formats
 
-- `pipe` (default): `[type]|key|desc|file:line`
+- `pipe` (default): pipe-delimited `[type]|key|desc|file:line`
 - `tsv`: Tab-separated
 - `json`: JSON array
 
