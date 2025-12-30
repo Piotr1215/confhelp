@@ -39,7 +39,15 @@ confhelp -c config.toml -b ~/dotfiles --edit
 confhelp -c config.toml -b ~/dotfiles -f json
 ```
 
-The `--edit` flag drops you directly into the file at the exact line where the binding is defined. Change the binding, save, done.
+Example output:
+
+```
+[tmux]   prefix+g   display-popup -w 80%...   .tmux.conf:42
+[alias]  gs         git status                .zsh_aliases:15
+[bind]   ^[e        edit-command-line         .zshrc:89
+```
+
+The `--edit` flag drops you directly into the file at the exact line. Change the binding, save, done.
 
 ## Config Format
 
