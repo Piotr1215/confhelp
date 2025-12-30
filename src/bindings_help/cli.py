@@ -1,5 +1,7 @@
 """CLI - parse and optionally select bindings with fzf."""
 
+from __future__ import annotations
+
 import argparse
 import os
 import signal
