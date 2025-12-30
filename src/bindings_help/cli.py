@@ -2,9 +2,13 @@
 
 import argparse
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
+
+# Handle broken pipe (e.g., confhelp | head) gracefully
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 from iterfzf import iterfzf
 
