@@ -9,13 +9,11 @@ Config-driven parser for extracting keybindings from dotfiles.
 
 ![demo](media/demo.png)
 
-## Why
+**What**: Extracts keybindings from config files (tmux, zsh, vim, etc.) using regex patterns defined in TOML.
 
-Most developers accumulate keybindings across tmux, zsh, vim, and other tools. These bindings live scattered across config files, and remembering them all becomes impossible.
+**How**: Point `confhelp` at your dotfiles with a config defining patterns per file type. It outputs `[type]|key|desc|file:line` - pipe to fzf, rofi, or scripts.
 
-The typical solution is maintaining a static YAML or markdown file listing shortcuts. But this falls out of sync - you add a binding and forget to update the docs.
-
-confhelp solves this by parsing your actual config files. Define regex patterns once, and confhelp extracts bindings directly from source. Your help system stays in sync because it reads the same files you edit.
+**Why**: Static cheatsheets drift out of sync. `tldr`/`cheat.sh` show generic examples, not your bindings. Grepping configs works but no structure. `confhelp` gives you searchable, structured output from your actual configs with jump-to-definition.
 
 ## Install
 
@@ -103,7 +101,7 @@ The pipe format works well with `column -t -s'|'` for aligned display.
 
 ## Integration Examples
 
-confhelp outputs text. How you display it is up to you.
+`confhelp` outputs text. How you display it is up to you.
 
 ### Alacritty Popup
 
