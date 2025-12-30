@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "confhelp"
+version = "0.1.0"
+description = "Config-driven parser for keybindings with fzf interface"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Piotr Zaniewski" }]
+dependencies = [
+    "iterfzf>=1.0",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.1"]
+
+[project.scripts]
+confhelp = "bindings_help.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bindings_help"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
