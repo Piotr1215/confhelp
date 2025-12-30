@@ -7,6 +7,16 @@
 
 Config-driven parser for extracting keybindings from dotfiles.
 
+![demo](media/demo.png)
+
+## Why
+
+Most developers accumulate keybindings across tmux, zsh, vim, and other tools. These bindings live scattered across config files, and remembering them all becomes impossible.
+
+The typical solution is maintaining a static YAML or markdown file listing shortcuts. But this falls out of sync - you add a binding and forget to update the docs.
+
+confhelp solves this by parsing your actual config files. Define regex patterns once, and confhelp extracts bindings directly from source. Your help system stays in sync because it reads the same files you edit.
+
 ## Install
 
 ```bash
@@ -29,9 +39,11 @@ confhelp -c config.toml -b ~/dotfiles --edit
 confhelp -c config.toml -b ~/dotfiles -f json
 ```
 
+The `--edit` flag drops you directly into the file at the exact line where the binding is defined. Change the binding, save, done.
+
 ## Config Format
 
-Define parsers in TOML:
+Define parsers in TOML. Each section describes how to extract bindings from a set of files:
 
 ```toml
 [tmux]
@@ -50,6 +62,11 @@ key_group = 1
 desc_group = 2
 type = "alias"
 strip_quotes = true
+
+[abbrev]
+paths = [".zsh_abbreviations"]
+mode = "abbrev_block"
+type = "abbrev"
 ```
 
 ### Config Options
@@ -73,6 +90,41 @@ strip_quotes = true
 - `pipe` (default): `[type]|key|desc|file:line`
 - `tsv`: Tab-separated
 - `json`: JSON array
+
+The pipe format works well with `column -t -s'|'` for aligned display.
+
+## Integration Examples
+
+confhelp outputs text. How you display it is up to you.
+
+### Alacritty Popup
+
+Spawn a centered popup window showing bindings. Enter jumps to the file:
+
+```bash
+selection=$(confhelp -c config.toml -b ~/dotfiles | column -t -s'|' | fzf)
+# parse selection, open in editor
+```
+
+See `examples/alacritty-popup.sh` for a complete implementation.
+
+### tmux Popup
+
+```bash
+tmux display-popup -w 80% -h 80% -E 'confhelp -c config.toml -b ~/dotfiles --select'
+```
+
+See `examples/tmux-popup.sh` for a complete implementation.
+
+### Rofi/dmenu
+
+```bash
+confhelp -c config.toml -b ~/dotfiles | rofi -dmenu
+```
+
+## Acknowledgments
+
+Inspired by [Extracto](https://github.com/sarthakbhatkar1/Extracto).
 
 ## License
 
