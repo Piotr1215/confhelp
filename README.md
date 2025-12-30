@@ -5,15 +5,26 @@
 [![CI](https://github.com/Piotr1215/confhelp/actions/workflows/publish.yml/badge.svg)](https://github.com/Piotr1215/confhelp/actions/workflows/publish.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Config-driven parser for extracting keybindings from dotfiles.
+Find and edit your keybindings instantly.
 
 ![demo](media/demo.png)
 
-**What**: Extracts keybindings from config files (tmux, zsh, vim, etc.) using regex patterns defined in TOML.
+## The Problem
 
-**How**: Point `confhelp` at your dotfiles with a config defining patterns per file type. It outputs `[type]|key|desc|file:line` - pipe to fzf, rofi, or scripts.
+Over time you accumulate tmux bindings, zsh aliases, vim mappings, custom functions - scattered across dozens of files. You *know* you set something up, but where?
 
-**Why**: Static cheatsheets drift out of sync. `tldr`/`cheat.sh` show generic examples, not your bindings. Grepping configs works but no structure. `confhelp` gives you searchable, structured output from your actual configs with jump-to-definition.
+**Two pain points:**
+
+1. **Finding bindings** - "What key did I bind for git status?" "Do I have an alias for docker compose?"
+2. **Editing bindings** - You remember it exists, now you need to change it. Which file? What line? grep → open → scroll → find → edit. Every. Single. Time.
+
+## The Solution
+
+```bash
+confhelp -b ~/dotfiles --edit
+```
+
+Fuzzy search all your bindings → select one → opens `$EDITOR` at exact file:line. No grepping, no scrolling, no hunting.
 
 ## Install
 
