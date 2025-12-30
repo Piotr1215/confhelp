@@ -9,6 +9,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass
@@ -30,7 +31,7 @@ def load_config(config_path: Path) -> dict:
         return tomllib.load(f)
 
 
-def parse_file(path: Path, cfg: dict) -> list[Binding]:
+def parse_file(path: Path, cfg: dict, rel_path: Optional[str] = None) -> list[Binding]:
     """Parse a single file according to config."""
     if not path.exists():
         return []
@@ -38,7 +39,7 @@ def parse_file(path: Path, cfg: dict) -> list[Binding]:
     results = []
     content = path.read_text()
     lines = content.splitlines()
-    fname = path.name
+    fname = rel_path if rel_path else path.name
 
     # Special mode for abbreviations block
     if cfg.get("mode") == "abbrev_block":
@@ -104,7 +105,7 @@ def parse_all(config_path: Path, base_dir: Path) -> list[Binding]:
     for name, cfg in config.items():
         for rel_path in cfg.get("paths", []):
             path = base_dir / rel_path
-            results = parse_file(path, cfg)
+            results = parse_file(path, cfg, rel_path)
             all_results.extend(results)
 
     return all_results
