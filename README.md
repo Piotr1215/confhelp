@@ -2,7 +2,7 @@
 
 [![PyPI version](https://badge.fury.io/py/confhelp.svg)](https://badge.fury.io/py/confhelp)
 [![Python](https://img.shields.io/pypi/pyversions/confhelp.svg)](https://pypi.org/project/confhelp/)
-[![Tests](https://github.com/Piotr1215/confhelp/actions/workflows/test.yml/badge.svg)](https://github.com/Piotr1215/confhelp/actions/workflows/test.yml)
+[![CI](https://github.com/Piotr1215/confhelp/actions/workflows/publish.yml/badge.svg)](https://github.com/Piotr1215/confhelp/actions/workflows/publish.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Config-driven parser for extracting keybindings from dotfiles.

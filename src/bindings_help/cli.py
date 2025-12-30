@@ -27,15 +27,61 @@ def find_config() -> Path | None:
     return None
 
 
+SAMPLE_CONFIG = '''\
+# confhelp config - define regex patterns for each config file type
+
+[tmux]
+paths = [".tmux.conf"]
+match_line = "^bind"
+regex = 'bind(?:-key)?\\s+(?:-n\\s+)?(\\S+)(.*)'
+key_group = 1
+desc_group = 2
+type = "tmux"
+truncate = 80
+
+[alias]
+paths = [".zsh_aliases", ".bash_aliases"]
+regex = 'alias\\s+([^=]+)=(.*)'
+key_group = 1
+desc_group = 2
+type = "alias"
+strip_quotes = true
+
+[bindkey]
+paths = [".zshrc"]
+match_line = "bindkey"
+regex = "bindkey\\s+['\"]([^'\"]+)['\"]\\s+(\\S+)"
+key_group = 1
+desc_group = 2
+type = "bind"
+desc_from_comment = true
+'''
+
+
+def init_config() -> None:
+    config_dir = Path.home() / ".config/confhelp"
+    config_file = config_dir / "config.toml"
+
+    if config_file.exists():
+        print(f"Config already exists: {config_file}")
+        return
+
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_file.write_text(SAMPLE_CONFIG)
+    print(f"Created: {config_file}")
+
+
 def main():
     default_config = find_config()
     parser = argparse.ArgumentParser(
         description="Parse keybindings from config files",
         epilog="Example: confhelp -b ~/dotfiles"
     )
+    parser.add_argument("--init", action="store_true",
+                       help="Create sample config at ~/.config/confhelp/config.toml")
     parser.add_argument("--config", "-c", type=Path, default=default_config,
                        help="Parser config TOML file (default: ~/.config/confhelp/config.toml)")
-    parser.add_argument("--base-dir", "-b", type=Path, required=True,
+    parser.add_argument("--base-dir", "-b", type=Path,
                        help="Base directory for config files")
     parser.add_argument("--format", "-f", choices=["pipe", "tsv", "json"], default="pipe",
                        help="Output format (default: pipe-separated)")
@@ -45,12 +91,19 @@ def main():
                        help="Open selected binding in $EDITOR (implies --select)")
     args = parser.parse_args()
 
+    if args.init:
+        init_config()
+        return
+
+    if not args.base_dir:
+        parser.error("--base-dir/-b is required")
+
     if not args.config:
         paths = get_default_config_paths()
-        print(f"Error: No config file found. Looked in:", file=sys.stderr)
+        print("Error: No config file found. Looked in:", file=sys.stderr)
         for p in paths:
             print(f"  - {p}", file=sys.stderr)
-        print("Use -c to specify a config file.", file=sys.stderr)
+        print("Run 'confhelp --init' to create a sample config.", file=sys.stderr)
         sys.exit(1)
 
     bindings = parse_all(args.config, args.base_dir)
