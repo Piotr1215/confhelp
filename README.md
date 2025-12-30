@@ -24,7 +24,7 @@ Over time you accumulate tmux bindings, zsh aliases, vim mappings, custom functi
 confhelp -b ~/dotfiles --edit
 ```
 
-Fuzzy search all your bindings → select one → opens `$EDITOR` at exact file:line. No grepping, no scrolling, no hunting.
+Fuzzy search all your bindings → select one → opens `$EDITOR` at exact file:line.
 
 ## Install
 
