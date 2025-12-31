@@ -49,6 +49,12 @@ confhelp -f json
 
 # Override base directory
 confhelp -b ~/other-dotfiles
+
+# Show keys defined more than once
+confhelp --conflicts
+
+# Report lines that look like bindings but failed to parse
+confhelp --check
 ```
 
 Example output:

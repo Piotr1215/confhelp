@@ -40,3 +40,8 @@ pythonpath = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.mutmut]
+paths_to_mutate = "src/bindings_help/"
+tests_dir = "tests/"
+runner = ".venv/bin/python -m pytest -x -q"

@@ -25,18 +25,37 @@ class Binding:
         return f"[{self.type}]|{self.key}|{self.desc}|{self.file}:{self.line}"
 
 
+@dataclass
+class MissedLine:
+    """A line that matched match_line but failed regex."""
+    file: str
+    line: int
+    content: str
+    parser_name: str
+
+
 def load_config(config_path: Path) -> dict:
     """Load parser configuration from TOML file."""
     with open(config_path, "rb") as f:
         return tomllib.load(f)
 
 
-def parse_file(path: Path, cfg: dict, rel_path: Optional[str] = None) -> list[Binding]:
-    """Parse a single file according to config."""
+def parse_file(
+    path: Path,
+    cfg: dict,
+    rel_path: Optional[str] = None,
+    collect_missed: bool = False,
+    parser_name: str = "",
+) -> tuple[list[Binding], list[MissedLine]]:
+    """Parse a single file according to config.
+
+    Returns (bindings, missed_lines). missed_lines is empty unless collect_missed=True.
+    """
     if not path.exists():
-        return []
+        return [], []
 
     results = []
+    missed = []
     content = path.read_text()
     lines = content.splitlines()
     fname = rel_path if rel_path else path.name
@@ -60,6 +79,8 @@ def parse_file(path: Path, cfg: dict, rel_path: Optional[str] = None) -> list[Bi
 
         m = regex.search(stripped)
         if not m:
+            if collect_missed:
+                missed.append(MissedLine(fname, i, stripped, parser_name))
             continue
 
         key = m.group(cfg.get("key_group", 1))
@@ -85,13 +106,19 @@ def parse_file(path: Path, cfg: dict, rel_path: Optional[str] = None) -> list[Bi
 
         results.append(Binding(cfg["type"], key, desc, fname, i))
 
-    return results
+    return results, missed
 
 
-def parse_all(config_path: Path, base_dir: Path) -> list[Binding]:
-    """Parse all configs and return bindings."""
+def parse_all(
+    config_path: Path, base_dir: Path, collect_missed: bool = False
+) -> tuple[list[Binding], list[MissedLine]]:
+    """Parse all configs and return bindings.
+
+    Returns (bindings, missed_lines). missed_lines is empty unless collect_missed=True.
+    """
     config = load_config(config_path)
     all_results = []
+    all_missed = []
 
     for name, cfg in config.items():
         # Skip non-parser entries (e.g., base_dirs)
@@ -103,11 +130,30 @@ def parse_all(config_path: Path, base_dir: Path) -> list[Binding]:
                 for path in base_dir.glob(rel_path):
                     if path.is_file():
                         file_rel = str(path.relative_to(base_dir))
-                        results = parse_file(path, cfg, file_rel)
+                        results, missed = parse_file(
+                            path, cfg, file_rel, collect_missed, name
+                        )
                         all_results.extend(results)
+                        all_missed.extend(missed)
             else:
                 path = base_dir / rel_path
-                results = parse_file(path, cfg, rel_path)
+                results, missed = parse_file(path, cfg, rel_path, collect_missed, name)
                 all_results.extend(results)
+                all_missed.extend(missed)
 
-    return all_results
+    return all_results, all_missed
+
+
+def find_conflicts(bindings: list[Binding]) -> dict[tuple[str, str], list[Binding]]:
+    """Find keys that are defined more than once.
+
+    Returns dict mapping (type, key) to list of bindings with that key.
+    Only includes entries with 2+ bindings.
+    """
+    from collections import defaultdict
+
+    by_key: dict[tuple[str, str], list[Binding]] = defaultdict(list)
+    for b in bindings:
+        by_key[(b.type, b.key)].append(b)
+
+    return {k: v for k, v in by_key.items() if len(v) > 1}
