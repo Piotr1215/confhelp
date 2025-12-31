@@ -114,7 +114,7 @@ type = "nvim"
 | Option | Description |
 |--------|-------------|
 | `paths` | List of files or glob patterns (e.g., `**/*.lua`) |
-| `regex` | Pattern with capture groups for key/desc |
+| `regex` | Pattern with capture groups for key/desc (Python `re` syntax) |
 | `key_group` | Capture group number for the key |
 | `desc_group` | Capture group number for description |
 | `match_line` | Only process lines matching this pattern |
@@ -123,6 +123,15 @@ type = "nvim"
 | `strip_quotes` | Remove surrounding quotes from desc |
 | `desc_literal` | Use fixed string as description |
 | `desc_from_comment` | Extract desc from trailing `# comment` |
+
+### Regex Tips
+
+Patterns use Python's [`re`](https://docs.python.org/3/library/re.html) module. Test patterns at [regex101.com](https://regex101.com/) (select Python flavor).
+
+Quick CLI test:
+```bash
+echo "bind r reload" | python -c "import re,sys; m=re.search(r'bind\s+(\S+)\s+(.*)', sys.stdin.read()); print(m.groups() if m else 'no match')"
+```
 
 ## Output Formats
 
