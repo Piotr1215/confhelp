@@ -14,7 +14,7 @@ signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 from iterfzf import iterfzf
 
-from .parser import parse_all
+from .parser import find_conflicts, parse_all
 
 def get_default_config_paths() -> list[Path]:
     paths = []
@@ -98,6 +98,10 @@ def main():
                        help="Interactive selection with fzf")
     parser.add_argument("--edit", "-e", action="store_true",
                        help="Open selected binding in $EDITOR (implies --select)")
+    parser.add_argument("--check", action="store_true",
+                       help="Report lines that look like bindings but failed to parse")
+    parser.add_argument("--conflicts", action="store_true",
+                       help="Show keys defined more than once")
     args = parser.parse_args()
 
     if args.init:
@@ -106,7 +110,6 @@ def main():
 
     # Read base_dirs from config if not provided on command line
     if not args.base_dirs and args.config:
-        import sys
         if sys.version_info >= (3, 11):
             import tomllib
         else:
@@ -129,12 +132,42 @@ def main():
 
     # Parse all base directories
     all_bindings = []
+    all_missed = []
     for base_dir in args.base_dirs:
-        bindings = parse_all(args.config, base_dir)
+        bindings, missed = parse_all(args.config, base_dir, collect_missed=args.check)
         # Store base_dir with each binding for path resolution
         for b in bindings:
             b._base_dir = base_dir
+        for m in missed:
+            m._base_dir = base_dir
         all_bindings.extend(bindings)
+        all_missed.extend(missed)
+
+    # Check mode: report lines that matched match_line but failed regex
+    if args.check:
+        if not all_missed:
+            print("All lines parsed successfully.", file=sys.stderr)
+            sys.exit(0)
+        print(f"Found {len(all_missed)} unparsed line(s):\n", file=sys.stderr)
+        for m in all_missed:
+            path = m._base_dir / m.file
+            print(f"[{m.parser_name}] {path}:{m.line}")
+            print(f"  {m.content}\n")
+        sys.exit(1)
+
+    # Conflicts mode: show keys defined more than once
+    if args.conflicts:
+        conflicts = find_conflicts(all_bindings)
+        if not conflicts:
+            print("No conflicting keys found.", file=sys.stderr)
+            sys.exit(0)
+        print(f"Found {len(conflicts)} conflicting key(s):\n", file=sys.stderr)
+        for (btype, key), bindings_list in sorted(conflicts.items()):
+            print(f"[{btype}] {key}")
+            for b in bindings_list:
+                print(f"  {b._base_dir / b.file}:{b.line}  {b.desc[:50]}")
+            print()
+        sys.exit(1)
 
     # Interactive mode
     if args.select or args.edit:
