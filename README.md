@@ -75,6 +75,10 @@ Define parsers in TOML. Each section describes how to extract bindings from a se
 # Default directories to search (no -b needed)
 base_dirs = ["~/dotfiles", "~/work-dotfiles"]
 
+# tmux: bind [-n] <key> <command>
+# Example: bind r source-file ~/.tmux.conf
+#          bind-key -n M-l popup -E lazygit
+# Captures: (1) key=r or M-l, (2) command
 [tmux]
 paths = [".tmux.conf"]
 match_line = "^bind"
@@ -84,6 +88,10 @@ desc_group = 2
 type = "tmux"
 truncate = 100
 
+# zsh alias: alias [-gs] <name>=<command>
+# Example: alias gs='git status'
+#          alias -g C='| xsel --clipboard'
+# Captures: (1) name=gs or C, (2) command
 [alias]
 paths = [".zsh_aliases", ".zsh_claude"]
 regex = "alias\\s+(?:-[gs]\\s+)?([^=]+)=(.*)"
@@ -92,6 +100,9 @@ desc_group = 2
 type = "alias"
 strip_quotes = true
 
+# zsh-abbr: "abbrev" 'expansion'
+# Example: "ga" 'git add'
+# Captures: (1) abbrev=ga, (2) expansion=git add
 [abbrev]
 paths = [".zsh_abbreviations"]
 match_line = '".*"'
@@ -100,6 +111,9 @@ key_group = 1
 desc_group = 2
 type = "abbrev"
 
+# nvim keymap with desc: vim.keymap.set(mode, "key", ..., { desc = "..." })
+# Example: vim.keymap.set("n", "<leader>w", ":w<CR>", { desc = "save file" })
+# Captures: (1) key=<leader>w, (2) desc=save file
 [nvim]
 paths = [".config/nvim/lua/**/*.lua"]  # glob pattern
 match_line = "vim.keymap.set"
@@ -107,6 +121,18 @@ regex = 'vim\.keymap\.set\([^,]+,\s*"([^"]+)".*desc\s*=\s*"([^"]+)"'
 key_group = 1
 desc_group = 2
 type = "nvim"
+
+# nvim table format: { "mode", "key", "command" }
+# Example: { "n", "<leader>mp", ":MarkdownPreview<CR>" }
+# Captures: (1) key=<leader>mp, (2) command
+[nvim-table]
+paths = [".config/nvim/lua/**/*.lua", ".config/nvim/ftplugin/**/*.lua"]
+match_line = '^\s*\{ "[nvixso]"'
+regex = '\{ "[nvixso]",\s*"([^"]+)",\s*"?([^"]+)"?'
+key_group = 1
+desc_group = 2
+type = "nvim"
+truncate = 60
 ```
 
 ### Config Options
