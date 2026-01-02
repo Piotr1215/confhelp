@@ -111,24 +111,21 @@ key_group = 1
 desc_group = 2
 type = "abbrev"
 
-# nvim keymap with desc: vim.keymap.set(mode, "key", ..., { desc = "..." })
-# Example: vim.keymap.set("n", "<leader>w", ":w<CR>", { desc = "save file" })
-# Captures: (1) key=<leader>w, (2) desc=save file
+# nvim runtime query (recommended)
+# Queries nvim headlessly for keymaps, greps source files for locations.
+# Only shows user-defined bindings with desc = "..." in your config.
 [nvim]
-paths = [".config/nvim/lua/**/*.lua"]  # glob pattern
+query = "nvim"
+truncate = 60
+
+# nvim regex fallback (if nvim binary unavailable)
+[nvim-regex]
+paths = [".config/nvim/lua/**/*.lua"]
 match_line = "vim.keymap.set"
 regex = 'vim\.keymap\.set\([^,]+,\s*"([^"]+)".*desc\s*=\s*"([^"]+)"'
 key_group = 1
 desc_group = 2
 type = "nvim"
-
-# nvim runtime query (recommended)
-# Runs nvim headlessly to get all keymaps with descriptions,
-# then greps source files to find definition locations.
-# Only shows user-defined bindings (plugin bindings are filtered out).
-[nvim]
-query = "nvim"
-truncate = 60
 ```
 
 ### Config Options
