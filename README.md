@@ -67,6 +67,22 @@ Example output:
 
 The `--edit` flag drops you directly into the file at the exact line. Change the binding, save, done.
 
+## Binding Sources
+
+confhelp supports two ways to extract bindings:
+
+### 1. Regex Parsing (data-driven)
+
+Define patterns in TOML to extract bindings from config files. Works for any text-based config format - tmux, zsh, aliases, etc. You specify `paths`, `regex`, and capture groups.
+
+### 2. Query Engines (code-driven)
+
+Some tools (like nvim) store bindings in ways that can't be reliably parsed with regex - runtime keymaps, plugin-generated bindings, multi-line table formats. Query engines run the tool itself to extract bindings.
+
+Currently available: `nvim` (runs nvim headlessly to query keymaps)
+
+**Architecture note:** Query engines are currently hardcoded. Future versions may support registering custom extractors - any code that returns `(type, key, desc, file, line)` tuples could become a binding source. This would allow community-contributed engines for tools like vim, emacs, i3, sway, etc.
+
 ## Config Format
 
 Define parsers in TOML. Each section describes how to extract bindings from a set of files:
