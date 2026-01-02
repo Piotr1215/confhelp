@@ -354,3 +354,100 @@ type = "nvim"
             assert result.returncode == 0
             # Output should show full relative path
             assert "config/nvim/lua/init.lua:" in result.stdout
+
+    def test_query_engines_empty_list(self):
+        """Empty query_engines list works without errors."""
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d)
+
+            config = base / "config.toml"
+            config.write_text('''
+query_engines = []
+
+[tmux]
+paths = [".tmux.conf"]
+regex = 'bind\\s+(\\S+)'
+key_group = 1
+type = "tmux"
+''')
+
+            (base / ".tmux.conf").write_text("bind r reload")
+
+            result = subprocess.run(
+                ["confhelp", "-c", str(config), "-b", str(base)],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0
+            assert "[tmux]|r|" in result.stdout
+
+    def test_query_engines_unknown_engine(self):
+        """Unknown query engine is silently skipped."""
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d)
+
+            config = base / "config.toml"
+            config.write_text('''
+query_engines = ["nonexistent_engine"]
+
+[tmux]
+paths = [".tmux.conf"]
+regex = 'bind\\s+(\\S+)'
+key_group = 1
+type = "tmux"
+''')
+
+            (base / ".tmux.conf").write_text("bind r reload")
+
+            result = subprocess.run(
+                ["confhelp", "-c", str(config), "-b", str(base)],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0
+            assert "[tmux]|r|" in result.stdout
+
+    def test_query_engines_nvim_no_binary(self):
+        """nvim query engine works gracefully when nvim not installed."""
+        from bindings_help.parser import query_nvim_keymaps
+        import shutil
+
+        # Test the function directly with mocked shutil.which
+        original_which = shutil.which
+
+        def mock_which(cmd):
+            if cmd == "nvim":
+                return None
+            return original_which(cmd)
+
+        shutil.which = mock_which
+        try:
+            result = query_nvim_keymaps({}, None)
+            assert result == []
+        finally:
+            shutil.which = original_which
+
+    def test_query_engines_skips_section_parsing(self):
+        """Sections listed in query_engines are not parsed as regex."""
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d)
+
+            config = base / "config.toml"
+            config.write_text('''
+query_engines = ["nvim"]
+
+[nvim]
+truncate = 60
+''')
+
+            # No files to parse, should work without error
+            result = subprocess.run(
+                ["confhelp", "-c", str(config), "-b", str(base)],
+                capture_output=True,
+                text=True,
+            )
+
+            # Should not fail trying to parse [nvim] as regex config
+            assert result.returncode == 0

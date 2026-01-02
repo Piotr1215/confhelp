@@ -75,6 +75,10 @@ Define parsers in TOML. Each section describes how to extract bindings from a se
 # Default directories to search (no -b needed)
 base_dirs = ["~/dotfiles", "~/work-dotfiles"]
 
+# Query engines - run external tools to get bindings
+# Available: "nvim" (queries nvim headlessly for keymaps)
+query_engines = ["nvim"]
+
 # tmux: bind [-n] <key> <command>
 # Example: bind r source-file ~/.tmux.conf
 #          bind-key -n M-l popup -E lazygit
@@ -111,14 +115,11 @@ key_group = 1
 desc_group = 2
 type = "abbrev"
 
-# nvim runtime query (recommended)
-# Queries nvim headlessly for keymaps, greps source files for locations.
-# Only shows user-defined bindings with desc = "..." in your config.
+# nvim query engine options (enabled via query_engines above)
 [nvim]
-query = "nvim"
 truncate = 60
 
-# nvim regex fallback (if nvim binary unavailable)
+# nvim regex fallback (if nvim binary unavailable, use this instead of query_engines)
 [nvim-regex]
 paths = [".config/nvim/lua/**/*.lua"]
 match_line = "vim.keymap.set"
@@ -129,6 +130,15 @@ type = "nvim"
 ```
 
 ### Config Options
+
+**Top-level options:**
+
+| Option | Description |
+|--------|-------------|
+| `base_dirs` | Default directories to search |
+| `query_engines` | List of query engines to enable (e.g., `["nvim"]`) |
+
+**Section options:**
 
 | Option | Description |
 |--------|-------------|
@@ -142,7 +152,6 @@ type = "nvim"
 | `strip_quotes` | Remove surrounding quotes from desc |
 | `desc_literal` | Use fixed string as description |
 | `desc_from_comment` | Extract desc from trailing `# comment` |
-| `query` | Special query mode (`"nvim"` queries nvim headlessly) |
 
 ### Regex Tips
 
