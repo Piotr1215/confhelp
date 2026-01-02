@@ -131,11 +131,12 @@ key_group = 1
 desc_group = 2
 type = "abbrev"
 
-# nvim query engine options (enabled via query_engines above)
-[nvim]
+# nvim query engine options
+[engine.nvim]
 truncate = 60
 
-# nvim regex fallback (if nvim binary unavailable, use this instead of query_engines)
+# nvim via regex (alternative to query engine - parses source files directly)
+# Only catches single-line vim.keymap.set calls with inline desc
 [nvim-regex]
 paths = [".config/nvim/lua/**/*.lua"]
 match_line = "vim.keymap.set"
@@ -190,24 +191,53 @@ The pipe format works well with `column -t -s'|'` for aligned display.
 
 `confhelp` outputs text. How you display it is up to you.
 
-### Alacritty Popup
+### fzf with Multiple Actions
 
-Spawn a centered popup window showing bindings. Enter jumps to the file:
+Use `--expect` to handle different keys. Ctrl+P extracts and opens paths from entries:
 
 ```bash
-selection=$(confhelp -b ~/dotfiles | column -t -s'|' | fzf)
-# parse selection, open in editor
+result=$(confhelp -b ~/dotfiles | column -t -s'|' | fzf \
+    --header='Enter=edit | Ctrl-P=open path | Ctrl-O=copy' \
+    --expect=ctrl-p,ctrl-o)
+
+key=$(echo "$result" | head -1)
+selection=$(echo "$result" | tail -1)
+
+case "$key" in
+    ctrl-p)
+        # Extract path from selection (supports /, ~, $HOME prefixes)
+        path=$(echo "$selection" | grep -oE '(/[^ ]+|~[^ ]+|\$HOME[^ ]+)' | head -1)
+        path="${path/#\~/$HOME}"
+        [[ -e "$path" ]] && $EDITOR "$path"
+        ;;
+    ctrl-o)
+        echo "$selection" | xsel -ib
+        ;;
+    *)
+        # Enter: parse file:line and open in editor
+        file_line=$(echo "$selection" | awk '{print $NF}')
+        file="${file_line%:*}"
+        line="${file_line##*:}"
+        $EDITOR "+$line" "$file"
+        ;;
+esac
 ```
 
-See `examples/alacritty-popup.sh` for a complete implementation.
+### Alacritty Popup
+
+Spawn a centered popup window:
+
+```bash
+alacritty --class popup -e bash -c 'confhelp -b ~/dotfiles --edit'
+```
+
+See `examples/alacritty-popup.sh` for a complete implementation with Ctrl+P path support.
 
 ### tmux Popup
 
 ```bash
 tmux display-popup -w 80% -h 80% -E 'confhelp -b ~/dotfiles --select'
 ```
-
-See `examples/tmux-popup.sh` for a complete implementation.
 
 ### Rofi/dmenu
 

@@ -249,17 +249,18 @@ def parse_all(
 
     # Handle query engines (top-level setting)
     query_engines = config.get("query_engines", [])
+    engine_configs = config.get("engine", {})
     for engine in query_engines:
         if engine == "nvim":
-            nvim_cfg = config.get("nvim", {})
+            nvim_cfg = engine_configs.get("nvim", {})
             all_results.extend(query_nvim_keymaps(nvim_cfg, base_dir))
 
     for name, cfg in config.items():
         # Skip non-parser entries
         if not isinstance(cfg, dict):
             continue
-        # Skip query-based sections (handled above)
-        if name in query_engines:
+        # Skip engine config namespace
+        if name == "engine":
             continue
         for rel_path in cfg.get("paths", []):
             # Expand ~ to home directory

@@ -430,7 +430,7 @@ type = "tmux"
             shutil.which = original_which
 
     def test_query_engines_skips_section_parsing(self):
-        """Sections listed in query_engines are not parsed as regex."""
+        """Engine config namespace is not parsed as regex."""
         with tempfile.TemporaryDirectory() as d:
             base = Path(d)
 
@@ -438,7 +438,7 @@ type = "tmux"
             config.write_text('''
 query_engines = ["nvim"]
 
-[nvim]
+[engine.nvim]
 truncate = 60
 ''')
 
