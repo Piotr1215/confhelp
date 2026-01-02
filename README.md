@@ -122,16 +122,12 @@ key_group = 1
 desc_group = 2
 type = "nvim"
 
-# nvim table format: { "mode", "key", "command" }
-# Example: { "n", "<leader>mp", ":MarkdownPreview<CR>" }
-# Captures: (1) key=<leader>mp, (2) command
-[nvim-table]
-paths = [".config/nvim/lua/**/*.lua", ".config/nvim/ftplugin/**/*.lua"]
-match_line = '^\s*\{ "[nvixso]"'
-regex = '\{ "[nvixso]",\s*"([^"]+)",\s*"?([^"]+)"?'
-key_group = 1
-desc_group = 2
-type = "nvim"
+# nvim runtime query (recommended)
+# Runs nvim headlessly to get all keymaps with descriptions,
+# then greps source files to find definition locations.
+# Only shows user-defined bindings (plugin bindings are filtered out).
+[nvim]
+query = "nvim"
 truncate = 60
 ```
 
@@ -149,6 +145,7 @@ truncate = 60
 | `strip_quotes` | Remove surrounding quotes from desc |
 | `desc_literal` | Use fixed string as description |
 | `desc_from_comment` | Extract desc from trailing `# comment` |
+| `query` | Special query mode (`"nvim"` queries nvim headlessly) |
 
 ### Regex Tips
 
