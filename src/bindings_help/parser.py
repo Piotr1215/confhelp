@@ -27,7 +27,7 @@ class Binding:
     line: int
 
     def to_line(self) -> str:
-        return f"[{self.type}]|{self.key}|{self.desc}|{self.file}:{self.line}"
+        return f"[{self.type}]|{self.key}|{self.desc.replace('|', '¦')}|{self.file}:{self.line}"
 
 
 @dataclass
