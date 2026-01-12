@@ -1,17 +1,20 @@
 """Config-driven parser for extracting bindings from config files."""
 
+import json
 import re
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 
+import yaml
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
     import tomli as tomllib
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -40,6 +43,161 @@ def load_config(config_path: Path) -> dict:
     """Load parser configuration from TOML file."""
     with open(config_path, "rb") as f:
         return tomllib.load(f)
+
+
+def _navigate_path(data: Any, path: str) -> Any:
+    """Navigate to a nested value using dot notation.
+
+    Args:
+        data: The parsed data structure (dict/list)
+        path: Dot-separated path like "bindings.keys" or "keyboard.shortcuts"
+
+    Returns:
+        The value at the specified path, or None if not found.
+    """
+    if not path:
+        return data
+
+    parts = path.split(".")
+    current = data
+
+    for part in parts:
+        if isinstance(current, dict):
+            if part not in current:
+                return None
+            current = current[part]
+        elif isinstance(current, list):
+            try:
+                idx = int(part)
+                current = current[idx]
+            except (ValueError, IndexError):
+                return None
+        else:
+            return None
+
+    return current
+
+
+def _find_line_for_value(content: str, key_value: str, start_line: int = 1) -> int:
+    """Find the line number where a key value appears in content.
+
+    For structured files, we search for the key value to approximate line numbers.
+    This handles the fact that parsed data loses line information.
+
+    Args:
+        content: Raw file content
+        key_value: The key/binding value to search for
+        start_line: Minimum line number to start searching from
+
+    Returns:
+        The 1-based line number where the value was found, or start_line if not found.
+    """
+    lines = content.splitlines()
+    # Escape special regex chars in key_value for literal matching
+    escaped = re.escape(str(key_value))
+
+    for i, line in enumerate(lines, 1):
+        if i < start_line:
+            continue
+        # Look for the key value in the line (as string literal in quotes or bare)
+        if re.search(rf'["\']?{escaped}["\']?', line):
+            return i
+
+    return start_line
+
+
+def _parse_file_structured(
+    path: Path,
+    cfg: dict,
+    rel_path: Optional[str] = None,
+) -> list[Binding]:
+    """Parse structured config files (TOML, YAML, JSON).
+
+    Config options:
+        parser: "toml", "yaml", or "json" - the format to parse
+        binding_path: dot notation path to the bindings array (e.g., "bindings.keys")
+        fields: list of fields to extract from each binding (optional, for validation)
+        key: which field is the primary key/binding
+        desc: which field is the description
+        type: the binding type for output
+        truncate: max description length (optional)
+
+    Example config:
+        [rio]
+        parser = "toml"
+        paths = [".config/rio/config.toml"]
+        binding_path = "bindings.keys"
+        fields = ["key", "mods", "action"]
+        key = "key"
+        desc = "action"
+        type = "rio"
+    """
+    content = path.read_text()
+    fname = rel_path if rel_path else path.name
+
+    # Parse the file based on format
+    parser_type = cfg.get("parser", "").lower()
+    try:
+        if parser_type == "toml":
+            data = tomllib.loads(content)
+        elif parser_type == "yaml":
+            data = yaml.safe_load(content)
+        elif parser_type == "json":
+            data = json.loads(content)
+        else:
+            return []
+    except Exception:
+        return []
+
+    # Navigate to bindings location
+    binding_path = cfg.get("binding_path", "")
+    bindings_data = _navigate_path(data, binding_path)
+
+    if not isinstance(bindings_data, list):
+        return []
+
+    # Extract field names for key and description
+    key_field = cfg.get("key", "key")
+    desc_field = cfg.get("desc", "desc")
+    binding_type = cfg.get("type", parser_type)
+    truncate = cfg.get("truncate", 0)
+
+    # Optional: combine multiple fields for key or desc
+    # If key/desc contains "+" it means combine fields: "mods+key"
+    def extract_field(entry: dict, field_spec: str) -> str:
+        if "+" in field_spec:
+            parts = field_spec.split("+")
+            values = []
+            for p in parts:
+                val = entry.get(p.strip(), "")
+                if val:
+                    values.append(str(val))
+            return "+".join(values) if values else ""
+        return str(entry.get(field_spec, ""))
+
+    results = []
+    last_line = 1
+
+    for entry in bindings_data:
+        if not isinstance(entry, dict):
+            continue
+
+        key = extract_field(entry, key_field)
+        desc = extract_field(entry, desc_field)
+
+        if not key:
+            continue
+
+        if truncate and len(desc) > truncate:
+            desc = desc[:truncate]
+
+        # Find approximate line number by searching for the key value
+        line_num = _find_line_for_value(content, key, last_line)
+        last_line = line_num + 1  # Next search starts after this line
+
+        results.append(Binding(binding_type, key, desc, fname, line_num))
+
+    return results
 
 
 def query_nvim_keymaps(cfg: dict, base_dir: Optional[Path] = None) -> list[Binding]:
@@ -177,6 +335,11 @@ def parse_file(
         return [], []
 
     fname = rel_path if rel_path else path.name
+
+    # Structured parser mode: parse TOML/YAML/JSON files
+    parser_type = cfg.get("parser", "").lower()
+    if parser_type in ("toml", "yaml", "json"):
+        return _parse_file_structured(path, cfg, rel_path), []
 
     # Multi-line mode: match across lines
     if cfg.get("multiline", False):

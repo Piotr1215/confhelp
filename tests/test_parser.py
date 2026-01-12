@@ -437,3 +437,467 @@ class TestFindConflicts:
 
         assert len(conflicts) == 1
         assert ("alias", "gs") in conflicts
+
+
+class TestStructuredParser:
+    """Tests for structured file parsing (TOML, YAML, JSON)."""
+
+    def test_parse_toml_bindings(self, temp_dir):
+        """Parse bindings from a TOML config file."""
+        config = {
+            "type": "rio",
+            "parser": "toml",
+            "binding_path": "bindings.keys",
+            "key": "key",
+            "desc": "action",
+        }
+        toml_file = temp_dir / "config.toml"
+        toml_file.write_text("""
+[bindings]
+keys = [
+    { key = "v", mods = "Control", action = "Paste" },
+    { key = "c", mods = "Control", action = "Copy" },
+    { key = "n", mods = "Control | Shift", action = "WindowCreateNew" },
+]
+""")
+        results, _ = parse_file(toml_file, config)
+
+        assert len(results) == 3
+        assert results[0].key == "v"
+        assert results[0].desc == "Paste"
+        assert results[0].type == "rio"
+        assert results[1].key == "c"
+        assert results[1].desc == "Copy"
+        assert results[2].key == "n"
+        assert results[2].desc == "WindowCreateNew"
+
+    def test_parse_yaml_bindings(self, temp_dir):
+        """Parse bindings from a YAML config file."""
+        config = {
+            "type": "app",
+            "parser": "yaml",
+            "binding_path": "keybindings",
+            "key": "key",
+            "desc": "command",
+        }
+        yaml_file = temp_dir / "config.yaml"
+        yaml_file.write_text("""
+keybindings:
+  - key: Ctrl+S
+    command: save
+  - key: Ctrl+O
+    command: open
+  - key: Ctrl+Q
+    command: quit
+""")
+        results, _ = parse_file(yaml_file, config)
+
+        assert len(results) == 3
+        assert results[0].key == "Ctrl+S"
+        assert results[0].desc == "save"
+        assert results[1].key == "Ctrl+O"
+        assert results[1].desc == "open"
+        assert results[2].key == "Ctrl+Q"
+        assert results[2].desc == "quit"
+
+    def test_parse_json_bindings(self, temp_dir):
+        """Parse bindings from a JSON config file."""
+        config = {
+            "type": "vscode",
+            "parser": "json",
+            "binding_path": "",  # Top-level array
+            "key": "key",
+            "desc": "command",
+        }
+        json_file = temp_dir / "keybindings.json"
+        json_file.write_text("""
+[
+    { "key": "ctrl+shift+p", "command": "workbench.action.showCommands" },
+    { "key": "ctrl+p", "command": "workbench.action.quickOpen" },
+    { "key": "ctrl+`", "command": "workbench.action.terminal.toggleTerminal" }
+]
+""")
+        results, _ = parse_file(json_file, config)
+
+        assert len(results) == 3
+        assert results[0].key == "ctrl+shift+p"
+        assert results[0].desc == "workbench.action.showCommands"
+        assert results[1].key == "ctrl+p"
+        assert results[2].key == "ctrl+`"
+
+    def test_parse_nested_binding_path(self, temp_dir):
+        """Navigate deeply nested structures with dot notation."""
+        config = {
+            "type": "app",
+            "parser": "yaml",
+            "binding_path": "settings.keyboard.shortcuts",
+            "key": "binding",
+            "desc": "action",
+        }
+        yaml_file = temp_dir / "config.yaml"
+        yaml_file.write_text("""
+settings:
+  theme: dark
+  keyboard:
+    shortcuts:
+      - binding: Ctrl+A
+        action: select_all
+      - binding: Ctrl+Z
+        action: undo
+""")
+        results, _ = parse_file(yaml_file, config)
+
+        assert len(results) == 2
+        assert results[0].key == "Ctrl+A"
+        assert results[0].desc == "select_all"
+
+    def test_combined_fields_with_plus(self, temp_dir):
+        """Support combining multiple fields using + syntax."""
+        config = {
+            "type": "rio",
+            "parser": "toml",
+            "binding_path": "bindings",
+            "key": "mods+key",  # Combine mods and key
+            "desc": "action",
+        }
+        toml_file = temp_dir / "config.toml"
+        toml_file.write_text("""
+[[bindings]]
+key = "v"
+mods = "Control"
+action = "Paste"
+
+[[bindings]]
+key = "c"
+mods = "Control"
+action = "Copy"
+""")
+        results, _ = parse_file(toml_file, config)
+
+        assert len(results) == 2
+        assert results[0].key == "Control+v"
+        assert results[0].desc == "Paste"
+        assert results[1].key == "Control+c"
+
+    def test_truncate_structured_desc(self, temp_dir):
+        """Truncate long descriptions in structured files."""
+        config = {
+            "type": "app",
+            "parser": "json",
+            "binding_path": "bindings",
+            "key": "key",
+            "desc": "description",
+            "truncate": 10,
+        }
+        json_file = temp_dir / "config.json"
+        json_file.write_text("""
+{
+    "bindings": [
+        { "key": "a", "description": "This is a very long description that should be truncated" }
+    ]
+}
+""")
+        results, _ = parse_file(json_file, config)
+
+        assert len(results) == 1
+        assert len(results[0].desc) == 10
+
+    def test_line_numbers_toml(self, temp_dir):
+        """Verify line numbers are approximated correctly for TOML."""
+        config = {
+            "type": "rio",
+            "parser": "toml",
+            "binding_path": "bindings.keys",
+            "key": "key",
+            "desc": "action",
+        }
+        toml_file = temp_dir / "config.toml"
+        toml_file.write_text("""# Rio config
+[bindings]
+keys = [
+    { key = "v", action = "Paste" },
+    { key = "c", action = "Copy" },
+]
+""")
+        results, _ = parse_file(toml_file, config)
+
+        assert len(results) == 2
+        # Line numbers should point to lines containing the keys
+        assert results[0].line >= 4  # "v" appears on line 4
+        assert results[1].line >= 5  # "c" appears on line 5
+
+    def test_line_numbers_yaml(self, temp_dir):
+        """Verify line numbers are approximated correctly for YAML."""
+        config = {
+            "type": "app",
+            "parser": "yaml",
+            "binding_path": "bindings",
+            "key": "key",
+            "desc": "cmd",
+        }
+        yaml_file = temp_dir / "config.yaml"
+        yaml_file.write_text("""# Comment
+bindings:
+  - key: Ctrl+A
+    cmd: select
+  - key: Ctrl+B
+    cmd: bold
+""")
+        results, _ = parse_file(yaml_file, config)
+
+        assert len(results) == 2
+        assert results[0].line == 3  # Ctrl+A on line 3
+        assert results[1].line == 5  # Ctrl+B on line 5
+
+    def test_empty_binding_path(self, temp_dir):
+        """Handle top-level arrays with empty binding_path."""
+        config = {
+            "type": "vscode",
+            "parser": "json",
+            "binding_path": "",
+            "key": "key",
+            "desc": "command",
+        }
+        json_file = temp_dir / "keybindings.json"
+        json_file.write_text('[{"key": "ctrl+a", "command": "selectAll"}]')
+
+        results, _ = parse_file(json_file, config)
+
+        assert len(results) == 1
+        assert results[0].key == "ctrl+a"
+
+    def test_missing_binding_path(self, temp_dir):
+        """Return empty results if binding_path doesn't exist."""
+        config = {
+            "type": "app",
+            "parser": "yaml",
+            "binding_path": "nonexistent.path",
+            "key": "key",
+            "desc": "cmd",
+        }
+        yaml_file = temp_dir / "config.yaml"
+        yaml_file.write_text("other: value\n")
+
+        results, _ = parse_file(yaml_file, config)
+
+        assert results == []
+
+    def test_invalid_file_content(self, temp_dir):
+        """Return empty results for invalid file content."""
+        config = {
+            "type": "app",
+            "parser": "json",
+            "binding_path": "bindings",
+            "key": "key",
+            "desc": "cmd",
+        }
+        json_file = temp_dir / "config.json"
+        json_file.write_text("not valid json {{{")
+
+        results, _ = parse_file(json_file, config)
+
+        assert results == []
+
+    def test_skip_entries_without_key(self, temp_dir):
+        """Skip binding entries that don't have the key field."""
+        config = {
+            "type": "app",
+            "parser": "yaml",
+            "binding_path": "bindings",
+            "key": "shortcut",
+            "desc": "action",
+        }
+        yaml_file = temp_dir / "config.yaml"
+        yaml_file.write_text("""
+bindings:
+  - shortcut: Ctrl+S
+    action: save
+  - action: orphan  # No shortcut field
+  - shortcut: Ctrl+Q
+    action: quit
+""")
+        results, _ = parse_file(yaml_file, config)
+
+        assert len(results) == 2
+        assert results[0].key == "Ctrl+S"
+        assert results[1].key == "Ctrl+Q"
+
+    def test_parse_all_with_structured_parser(self, temp_dir):
+        """Verify structured parsers work through parse_all."""
+        config_toml = temp_dir / "confhelp.toml"
+        config_toml.write_text("""
+[rio]
+parser = "toml"
+paths = ["rio.toml"]
+binding_path = "keys"
+key = "key"
+desc = "action"
+type = "rio"
+""")
+        rio_config = temp_dir / "rio.toml"
+        rio_config.write_text("""
+[[keys]]
+key = "v"
+action = "Paste"
+
+[[keys]]
+key = "c"
+action = "Copy"
+""")
+        results, _ = parse_all(config_toml, temp_dir)
+
+        assert len(results) == 2
+        assert results[0].type == "rio"
+        assert results[0].key == "v"
+        assert results[1].key == "c"
+
+    def test_default_type_from_parser(self, temp_dir):
+        """Use parser type as default binding type if type not specified."""
+        config = {
+            "parser": "yaml",
+            "binding_path": "bindings",
+            "key": "key",
+            "desc": "cmd",
+            # No "type" specified
+        }
+        yaml_file = temp_dir / "config.yaml"
+        yaml_file.write_text("bindings:\n  - key: a\n    cmd: test\n")
+
+        results, _ = parse_file(yaml_file, config)
+
+        assert len(results) == 1
+        assert results[0].type == "yaml"  # Defaults to parser type
+
+    def test_parse_zledit_actions(self, temp_dir):
+        """Parse zledit actions config (top-level [[actions]] array)."""
+        config = {
+            "type": "zledit",
+            "parser": "toml",
+            "binding_path": "actions",
+            "key": "binding",
+            "desc": "description",
+        }
+        toml_file = temp_dir / "config.toml"
+        toml_file.write_text("""
+[[actions]]
+binding = 'ctrl-u'
+description = 'upper'
+script = '~/.config/zledit/scripts/uppercase.sh'
+
+[[actions]]
+binding = 'ctrl-l'
+description = 'lower'
+script = '~/.config/zledit/scripts/lowercase.sh'
+""")
+        results, _ = parse_file(toml_file, config)
+
+        assert len(results) == 2
+        assert results[0].key == "ctrl-u"
+        assert results[0].desc == "upper"
+        assert results[0].type == "zledit"
+        assert results[1].key == "ctrl-l"
+        assert results[1].desc == "lower"
+
+    def test_parse_zledit_previewers(self, temp_dir):
+        """Parse zledit previewers config (top-level [[previewers]] array)."""
+        config = {
+            "type": "zledit-preview",
+            "parser": "toml",
+            "binding_path": "previewers",
+            "key": "pattern",
+            "desc": "description",
+        }
+        toml_file = temp_dir / "config.toml"
+        toml_file.write_text("""
+[[previewers]]
+pattern = '^https?://'
+description = 'URL preview'
+script = '~/.config/zledit/scripts/url-preview.sh'
+
+[[previewers]]
+pattern = '\\.(json|yaml|yml)$'
+description = 'Structured data'
+script = '/usr/bin/cat'
+""")
+        results, _ = parse_file(toml_file, config)
+
+        assert len(results) == 2
+        assert results[0].key == "^https?://"
+        assert results[0].desc == "URL preview"
+        assert results[0].type == "zledit-preview"
+        assert results[1].key == r"\.(json|yaml|yml)$"
+        assert results[1].desc == "Structured data"
+
+
+class TestNavigatePath:
+    """Tests for the _navigate_path helper function."""
+
+    def test_simple_path(self):
+        from bindings_help.parser import _navigate_path
+
+        data = {"a": {"b": {"c": 123}}}
+        assert _navigate_path(data, "a.b.c") == 123
+
+    def test_empty_path_returns_data(self):
+        from bindings_help.parser import _navigate_path
+
+        data = [1, 2, 3]
+        assert _navigate_path(data, "") == [1, 2, 3]
+
+    def test_list_index_navigation(self):
+        from bindings_help.parser import _navigate_path
+
+        data = {"items": [{"name": "first"}, {"name": "second"}]}
+        assert _navigate_path(data, "items.0.name") == "first"
+        assert _navigate_path(data, "items.1.name") == "second"
+
+    def test_missing_key_returns_none(self):
+        from bindings_help.parser import _navigate_path
+
+        data = {"a": {"b": 1}}
+        assert _navigate_path(data, "a.c") is None
+        assert _navigate_path(data, "x.y.z") is None
+
+    def test_invalid_list_index(self):
+        from bindings_help.parser import _navigate_path
+
+        data = {"items": [1, 2, 3]}
+        assert _navigate_path(data, "items.10") is None
+        assert _navigate_path(data, "items.notanumber") is None
+
+
+class TestFindLineForValue:
+    """Tests for the _find_line_for_value helper function."""
+
+    def test_find_quoted_value(self):
+        from bindings_help.parser import _find_line_for_value
+
+        content = 'line1\nkey = "myvalue"\nline3'
+        assert _find_line_for_value(content, "myvalue") == 2
+
+    def test_find_bare_value(self):
+        from bindings_help.parser import _find_line_for_value
+
+        content = "line1\nkey: myvalue\nline3"
+        assert _find_line_for_value(content, "myvalue") == 2
+
+    def test_start_line_parameter(self):
+        from bindings_help.parser import _find_line_for_value
+
+        content = "a: val\nb: val\nc: val"
+        # First occurrence is line 1, but start_line=2 should find line 2
+        assert _find_line_for_value(content, "val", start_line=2) == 2
+        assert _find_line_for_value(content, "val", start_line=3) == 3
+
+    def test_value_not_found_returns_start_line(self):
+        from bindings_help.parser import _find_line_for_value
+
+        content = "a: x\nb: y\nc: z"
+        assert _find_line_for_value(content, "notfound") == 1
+        assert _find_line_for_value(content, "notfound", start_line=5) == 5
+
+    def test_special_regex_chars_escaped(self):
+        from bindings_help.parser import _find_line_for_value
+
+        content = 'key = "ctrl+shift+p"\nother'
+        assert _find_line_for_value(content, "ctrl+shift+p") == 1

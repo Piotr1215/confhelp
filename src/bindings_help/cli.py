@@ -64,6 +64,16 @@ key_group = 1
 desc_group = 2
 type = "bind"
 desc_from_comment = true
+
+# Structured parser example (TOML/YAML/JSON)
+# [rio]
+# parser = "toml"  # or "yaml", "json"
+# paths = [".config/rio/config.toml"]
+# binding_path = "bindings.keys"  # dot notation to navigate structure
+# key = "key"                     # field for the binding key (use "mods+key" to combine)
+# desc = "action"                 # field for the description
+# type = "rio"
+# truncate = 80
 '''
 
 
