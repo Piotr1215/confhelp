@@ -210,11 +210,18 @@ def main():
         # Find the matching binding to get its base_dir
         for b in all_bindings:
             if b.file == fname and str(b.line) == line:
-                path = b._base_dir / fname
+                # Absolute paths (from ~ expansion) don't need base_dir prefix
+                if fname.startswith("/"):
+                    path = Path(fname)
+                else:
+                    path = b._base_dir / fname
                 break
         else:
-            # Fallback to first base_dir
-            path = args.base_dirs[0] / fname
+            # Fallback
+            if fname.startswith("/"):
+                path = Path(fname)
+            else:
+                path = args.base_dirs[0] / fname
 
         if args.edit:
             editor = os.environ.get("EDITOR", "vim")

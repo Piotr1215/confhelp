@@ -75,7 +75,29 @@ confhelp supports two ways to extract bindings:
 
 Define patterns in TOML to extract bindings from config files. Works for any text-based config format - tmux, zsh, aliases, etc. You specify `paths`, `regex`, and capture groups.
 
-### 2. Query Engines (code-driven)
+### 2. Structured Parsing (data-driven)
+
+For configs that store bindings in structured formats (TOML arrays, YAML lists, JSON), use the structured parser. It navigates the parsed data directly - no regex needed.
+
+```toml
+[zledit-actions]
+parser = "toml"
+paths = ["~/.config/zledit/config.toml"]
+binding_path = "actions"
+key = "binding"
+desc = "description"
+type = "zledit"
+```
+
+Parses configs like:
+```toml
+[[actions]]
+binding = 'ctrl-o'
+description = 'edit'
+script = '~/.config/zledit/scripts/edit.sh'
+```
+
+### 3. Query Engines (code-driven)
 
 Some tools (like nvim) store bindings in ways that can't be reliably parsed with regex - runtime keymaps, plugin-generated bindings, multi-line table formats. Query engines run the tool itself to extract bindings.
 
@@ -155,7 +177,7 @@ type = "nvim"
 | `base_dirs` | Default directories to search |
 | `query_engines` | List of query engines to enable (e.g., `["nvim"]`) |
 
-**Section options:**
+**Section options (regex parsing):**
 
 | Option | Description |
 |--------|-------------|
@@ -169,6 +191,18 @@ type = "nvim"
 | `strip_quotes` | Remove surrounding quotes from desc |
 | `desc_literal` | Use fixed string as description |
 | `desc_from_comment` | Extract desc from trailing `# comment` |
+
+**Section options (structured parsing):**
+
+| Option | Description |
+|--------|-------------|
+| `parser` | Format: `toml`, `yaml`, or `json` |
+| `paths` | List of config files to parse |
+| `binding_path` | Dot notation path to bindings array (e.g., `bindings.keys`) |
+| `key` | Field name for binding key (supports `field1+field2` to combine) |
+| `desc` | Field name for description |
+| `type` | Binding type label |
+| `truncate` | Max length for description |
 
 ### Regex Tips
 
