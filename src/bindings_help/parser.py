@@ -200,6 +200,49 @@ def _parse_file_structured(
     return results
 
 
+def query_tmuxinator_sessions(cfg: dict, base_dir: Optional[Path] = None) -> list[Binding]:
+    """Query tmuxinator session files."""
+    tmuxinator_dir = Path.home() / ".config/tmuxinator"
+    if not tmuxinator_dir.exists():
+        return []
+
+    bindings = []
+    for yml_file in sorted(tmuxinator_dir.glob("*.yml")):
+        try:
+            content = yml_file.read_text()
+            data = yaml.safe_load(content)
+            if not isinstance(data, dict):
+                continue
+
+            # Get session name (from 'name' field or filename)
+            name = data.get("name", yml_file.stem)
+            # Handle ERB templates like "<%= @args[0] %>"
+            if "<%=" in str(name):
+                name = yml_file.stem
+
+            # Get root directory as description
+            root = data.get("root", "~")
+
+            # Find line number of 'name:' field
+            line_num = 1
+            for i, line in enumerate(content.splitlines(), 1):
+                if line.strip().startswith("name:"):
+                    line_num = i
+                    break
+
+            bindings.append(Binding(
+                "mux",
+                name,
+                root,
+                yml_file.name,
+                line_num
+            ))
+        except (OSError, yaml.YAMLError):
+            continue
+
+    return bindings
+
+
 def query_nvim_keymaps(cfg: dict, base_dir: Optional[Path] = None) -> list[Binding]:
     """Query nvim for keymaps via headless execution."""
     if not shutil.which("nvim"):
@@ -417,6 +460,9 @@ def parse_all(
         if engine == "nvim":
             nvim_cfg = engine_configs.get("nvim", {})
             all_results.extend(query_nvim_keymaps(nvim_cfg, base_dir))
+        elif engine == "tmuxinator":
+            tmux_cfg = engine_configs.get("tmuxinator", {})
+            all_results.extend(query_tmuxinator_sessions(tmux_cfg, base_dir))
 
     for name, cfg in config.items():
         # Skip non-parser entries
