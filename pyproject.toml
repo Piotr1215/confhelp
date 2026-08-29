@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "confhelp"
-version = "0.7.0"
+version = "0.8.0"
 description = "Config-driven parser for keybindings with fzf interface"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -16,6 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
@@ -40,7 +41,7 @@ pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py39"
 
 [tool.mutmut]
 paths_to_mutate = "src/bindings_help/"
