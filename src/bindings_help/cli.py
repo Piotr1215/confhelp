@@ -9,12 +9,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Handle broken pipe (e.g., confhelp | head) gracefully
+# Handle broken pipe (e.g., confhelp | head) gracefully. This has to be installed
+# before iterfzf spawns anything, so the two imports below stay under it (E402).
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
-from iterfzf import iterfzf
+from iterfzf import iterfzf  # noqa: E402
 
-from .parser import find_conflicts, parse_all
+from .parser import find_conflicts, parse_all  # noqa: E402
 
 def get_default_config_paths() -> list[Path]:
     paths = []
@@ -158,11 +159,28 @@ def main():
         if not all_missed:
             print("All lines parsed successfully.", file=sys.stderr)
             sys.exit(0)
-        print(f"Found {len(all_missed)} unparsed line(s):\n", file=sys.stderr)
-        for m in all_missed:
-            path = m._base_dir / m.file
-            print(f"[{m.parser_name}] {path}:{m.line}")
-            print(f"  {m.content}\n")
+        unparsed = [m for m in all_missed if m.reason == "regex"]
+        dropped = [m for m in all_missed if m.reason == "no-source"]
+
+        if unparsed:
+            print(f"Found {len(unparsed)} unparsed line(s):\n", file=sys.stderr)
+            for m in unparsed:
+                path = m._base_dir / m.file
+                print(f"[{m.parser_name}] {path}:{m.line}")
+                print(f"  {m.content}\n")
+
+        if dropped:
+            print(
+                f"Dropped {len(dropped)} runtime binding(s) with no source location.\n"
+                "A query engine saw these but could not find their description as a\n"
+                "literal in your config, so they cannot be jumped to and are hidden.\n"
+                "Plugin bindings are expected here; your own are not.\n",
+                file=sys.stderr,
+            )
+            for m in dropped:
+                print(f"[{m.parser_name}] {m.content}")
+            print()
+
         sys.exit(1)
 
     # Conflicts mode: show keys defined more than once

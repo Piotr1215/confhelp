@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from bindings_help.parser import parse_file, parse_all, load_config, Binding, find_conflicts, MissedLine
+from bindings_help.parser import (
+    parse_file, parse_all, load_config, Binding, find_conflicts, MissedLine,
+    build_desc_index, bindings_from_keymap_output, query_tmuxinator_sessions,
+)
 
 
 @pytest.fixture
@@ -901,3 +904,131 @@ class TestFindLineForValue:
 
         content = 'key = "ctrl+shift+p"\nother'
         assert _find_line_for_value(content, "ctrl+shift+p") == 1
+
+
+class TestNvimDescIndex:
+    """The desc->location index, which had no coverage before.
+
+    nvim reports no source location for a Lua keymap, so confhelp recovers one by
+    grepping for the description literal. Everything the index cannot place is
+    dropped from the listing, which makes these two functions the point where a
+    real binding can silently disappear.
+    """
+
+    def test_index_finds_double_and_single_quoted_desc(self, temp_dir):
+        nvim = temp_dir / ".config/nvim/lua"
+        nvim.mkdir(parents=True)
+        (nvim / "maps.lua").write_text(
+            'vim.keymap.set("n", "<leader>a", cmd, { desc = "double quoted" })\n'
+            "vim.keymap.set('n', '<leader>b', cmd, { desc = 'single quoted' })\n"
+        )
+
+        index = build_desc_index(temp_dir / ".config/nvim", temp_dir)
+
+        assert index["double quoted"] == (".config/nvim/lua/maps.lua", 1)
+        assert index["single quoted"] == (".config/nvim/lua/maps.lua", 2)
+
+    def test_duplicate_desc_resolves_to_the_first_file_in_sorted_order(self, temp_dir):
+        """Two files claiming one description must not swap places between runs.
+
+        rglob order is filesystem-dependent, so last-wins made the reported location
+        for a shared description unstable.
+        """
+        nvim = temp_dir / ".config/nvim"
+        nvim.mkdir(parents=True)
+        (nvim / "a_first.lua").write_text('{ desc = "shared" }\n')
+        (nvim / "z_last.lua").write_text('{ desc = "shared" }\n')
+
+        for _ in range(3):
+            assert build_desc_index(nvim, temp_dir)["shared"] == (".config/nvim/a_first.lua", 1)
+
+    def test_missing_nvim_dir_yields_empty_index(self, temp_dir):
+        assert build_desc_index(temp_dir / "nope", temp_dir) == {}
+
+    def test_unreadable_file_is_skipped_not_fatal(self, temp_dir):
+        nvim = temp_dir / ".config/nvim"
+        nvim.mkdir(parents=True)
+        (nvim / "binary.lua").write_bytes(b"\xff\xfe\x00 desc = \"x\"")
+        (nvim / "good.lua").write_text('{ desc = "reachable" }\n')
+
+        assert "reachable" in build_desc_index(nvim, temp_dir)
+
+
+class TestNvimKeymapOutput:
+    def test_binding_with_a_known_desc_is_kept(self):
+        index = {"Find files": ("lua/telescope.lua", 12)}
+
+        result = bindings_from_keymap_output("<leader>ff|Find files", index)
+
+        assert result == [Binding("nvim", "<leader>ff", "Find files", "lua/telescope.lua", 12)]
+
+    def test_binding_with_no_source_is_dropped(self):
+        """This is the filter that keeps hundreds of plugin bindings out."""
+        assert bindings_from_keymap_output("<leader>x|from a plugin", {}) == []
+
+    def test_dropped_binding_is_recorded_when_a_collector_is_passed(self):
+        """The drop used to be silent, so a real binding could vanish unnoticed."""
+        missed = []
+
+        bindings_from_keymap_output("<leader>x|desc via a variable", {}, missed=missed)
+
+        assert len(missed) == 1
+        assert missed[0].reason == "no-source"
+        assert missed[0].parser_name == "nvim"
+        assert "<leader>x" in missed[0].content
+
+    def test_no_collector_means_no_recording(self):
+        assert bindings_from_keymap_output("<leader>x|orphan", {}) == []
+
+    def test_desc_is_truncated_but_matched_at_full_length(self):
+        """Truncation must happen after the lookup, or long descs stop resolving."""
+        long_desc = "d" * 80
+        index = {long_desc: ("maps.lua", 1)}
+
+        result = bindings_from_keymap_output(f"<leader>l|{long_desc}", index, truncate=60)
+
+        assert len(result) == 1
+        assert result[0].desc == "d" * 60
+
+    def test_blank_and_malformed_lines_are_ignored(self):
+        index = {"real": ("maps.lua", 1)}
+        missed = []
+
+        result = bindings_from_keymap_output(
+            "\nno-pipe-here\n<leader>r|real\n", index, missed=missed
+        )
+
+        assert [b.key for b in result] == ["<leader>r"]
+        assert missed == []
+
+
+class TestTmuxinatorEngine:
+    """The engine used to read ~/.config/tmuxinator unconditionally, which made it
+    untestable and unusable against a second config root."""
+
+    def test_reads_sessions_from_a_configured_path(self, temp_dir):
+        sessions = temp_dir / "sessions"
+        sessions.mkdir()
+        (sessions / "work.yml").write_text("name: work\nroot: ~/dev/work\n")
+
+        result = query_tmuxinator_sessions({"path": str(sessions)})
+
+        assert result == [Binding("mux", "work", "~/dev/work", "work.yml", 1)]
+
+    def test_erb_templated_name_falls_back_to_the_filename(self, temp_dir):
+        sessions = temp_dir / "sessions"
+        sessions.mkdir()
+        (sessions / "generic.yml").write_text('name: "<%= @args[0] %>"\nroot: ~/\n')
+
+        assert query_tmuxinator_sessions({"path": str(sessions)})[0].key == "generic"
+
+    def test_missing_directory_yields_nothing(self, temp_dir):
+        assert query_tmuxinator_sessions({"path": str(temp_dir / "nope")}) == []
+
+    def test_malformed_yaml_is_skipped_not_fatal(self, temp_dir):
+        sessions = temp_dir / "sessions"
+        sessions.mkdir()
+        (sessions / "broken.yml").write_text("name: [unclosed\n")
+        (sessions / "good.yml").write_text("name: good\nroot: ~/\n")
+
+        assert [b.key for b in query_tmuxinator_sessions({"path": str(sessions)})] == ["good"]

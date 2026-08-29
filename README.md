@@ -53,7 +53,8 @@ confhelp -b ~/other-dotfiles
 # Show keys defined more than once
 confhelp --conflicts
 
-# Report lines that look like bindings but failed to parse
+# Report lines that look like bindings but failed to parse, plus any runtime
+# bindings a query engine had to drop for lack of a source location
 confhelp --check
 ```
 
@@ -101,7 +102,36 @@ script = '~/.config/zledit/scripts/edit.sh'
 
 Some tools (like nvim) store bindings in ways that can't be reliably parsed with regex - runtime keymaps, plugin-generated bindings, multi-line table formats. Query engines run the tool itself to extract bindings.
 
-Currently available: `nvim` (runs nvim headlessly to query keymaps)
+Currently available: `nvim` (runs nvim headlessly to query keymaps) and `tmuxinator` (reads session files).
+
+**The nvim engine needs a literal `desc` at the call site.** nvim reports no source
+location for a Lua keymap: `lnum` is 0 and `sid` collapses to `init.lua` for anything
+loaded through `require`. So the engine recovers a location by grepping your config
+for the description as written, and a binding it cannot place is left out, since there
+would be nothing for `--edit` to jump to. That filter is what keeps several hundred
+plugin bindings out of the listing, but it also hides your own binding if its `desc`
+reached nvim through a variable:
+
+```lua
+-- invisible to confhelp: the literal never appears in a file
+local set = function(lhs, rhs, desc)
+  vim.keymap.set("n", lhs, rhs, { desc = desc })
+end
+set("<leader>ff", cmd, "Find files")
+
+-- visible: the call site spells the description out
+set("<leader>ff", cmd, { desc = "Find files" })
+```
+
+`confhelp --check` reports how many runtime bindings were dropped this way. Plugin
+bindings are expected in that list; yours are not. To see only your own:
+
+```bash
+confhelp --check 2>/dev/null | grep '^\[nvim\] <leader>'
+```
+
+Descriptions should be unique. The index is keyed by description text, so two bindings
+sharing one resolve to the same location (the first in sorted file order).
 
 **Architecture note:** Query engines are currently hardcoded. Future versions may support registering custom extractors - any code that returns `(type, key, desc, file, line)` tuples could become a binding source. This would allow community-contributed engines for tools like vim, emacs, i3, sway, etc.
 
@@ -156,6 +186,11 @@ type = "abbrev"
 # nvim query engine options
 [engine.nvim]
 truncate = 60
+path = ".config/nvim"      # where to grep for desc literals, relative to base_dir
+
+# tmuxinator query engine options
+[engine.tmuxinator]
+path = "~/.config/tmuxinator"
 
 # nvim via regex (alternative to query engine - parses source files directly)
 # Only catches single-line vim.keymap.set calls with inline desc

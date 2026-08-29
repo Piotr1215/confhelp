@@ -32,11 +32,17 @@ class Binding:
 
 @dataclass
 class MissedLine:
-    """A line that matched match_line but failed regex."""
+    """Something that looked like a binding but did not make it into the output.
+
+    reason "regex" is a source line that matched match_line but failed the regex.
+    reason "no-source" is a runtime binding a query engine found but could not
+    trace back to a config file, so it was dropped from the listing.
+    """
     file: str
     line: int
     content: str
     parser_name: str
+    reason: str = "regex"
 
 
 def load_config(config_path: Path) -> dict:
@@ -202,7 +208,7 @@ def _parse_file_structured(
 
 def query_tmuxinator_sessions(cfg: dict, base_dir: Optional[Path] = None) -> list[Binding]:
     """Query tmuxinator session files."""
-    tmuxinator_dir = Path.home() / ".config/tmuxinator"
+    tmuxinator_dir = Path(cfg.get("path", "~/.config/tmuxinator")).expanduser()
     if not tmuxinator_dir.exists():
         return []
 
@@ -243,7 +249,69 @@ def query_tmuxinator_sessions(cfg: dict, base_dir: Optional[Path] = None) -> lis
     return bindings
 
 
-def query_nvim_keymaps(cfg: dict, base_dir: Optional[Path] = None) -> list[Binding]:
+def build_desc_index(nvim_dir: Path, base_dir: Path) -> dict[str, tuple[str, int]]:
+    """Map a description literal to the file and line that spells it out.
+
+    nvim's API reports no source location for a Lua keymap (lnum is 0 and sid
+    collapses to init.lua for anything loaded through require), so the only way
+    back to a file is to grep for the desc as it was written. Files are walked in
+    sorted order and the first occurrence wins, so a description used twice always
+    resolves to the same place instead of varying with filesystem order.
+    """
+    index: dict[str, tuple[str, int]] = {}
+    if not nvim_dir.exists():
+        return index
+
+    for lua_path in sorted(nvim_dir.rglob("*.lua")):
+        try:
+            lines = lua_path.read_text().splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for i, line in enumerate(lines, 1):
+            # Match quote type separately to handle apostrophes in strings
+            match = re.search(r'desc\s*=\s*"([^"]+)"', line)
+            if not match:
+                match = re.search(r"desc\s*=\s*'([^']+)'", line)
+            if match and match.group(1) not in index:
+                index[match.group(1)] = (str(lua_path.relative_to(base_dir)), i)
+
+    return index
+
+
+def bindings_from_keymap_output(
+    output: str,
+    desc_locations: dict[str, tuple[str, int]],
+    truncate: int = 60,
+    missed: Optional[list] = None,
+) -> list[Binding]:
+    """Turn `lhs|desc` lines from the headless query into bindings.
+
+    A binding whose description is not in the index cannot be jumped to, so it is
+    left out of the listing. That is what keeps several hundred plugin bindings
+    out of the output, but it also swallows a user binding whose desc reached nvim
+    through a variable. Every drop is recorded in `missed` so --check can show it.
+    """
+    bindings = []
+    for line in output.strip().split("\n"):
+        if not line or "|" not in line:
+            continue
+        key, desc = line.split("|", 1)
+        if desc not in desc_locations:
+            if missed is not None:
+                missed.append(
+                    MissedLine("", 0, f"{key}  {desc}", "nvim", reason="no-source")
+                )
+            continue
+        src, line_num = desc_locations[desc]
+        if truncate and len(desc) > truncate:
+            desc = desc[:truncate]
+        bindings.append(Binding("nvim", key, desc, src, line_num))
+    return bindings
+
+
+def query_nvim_keymaps(
+    cfg: dict, base_dir: Optional[Path] = None, missed: Optional[list] = None
+) -> list[Binding]:
     """Query nvim for keymaps via headless execution."""
     if not shutil.which("nvim"):
         return []
@@ -277,44 +345,17 @@ end
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return []
 
-    # Build desc->location index by grepping nvim config files
     desc_locations: dict[str, tuple[str, int]] = {}
     if base_dir:
-        nvim_dir = base_dir / ".config/nvim"
-        if nvim_dir.exists():
-            for lua_path in nvim_dir.rglob("*.lua"):
-                try:
-                    for i, line in enumerate(lua_path.read_text().splitlines(), 1):
-                        # Look for desc = "..." or desc = '...' patterns
-                        # Match quote type separately to handle apostrophes in strings
-                        match = re.search(r'desc\s*=\s*"([^"]+)"', line)
-                        if not match:
-                            match = re.search(r"desc\s*=\s*'([^']+)'", line)
-                        if match:
-                            desc_locations[match.group(1)] = (
-                                str(lua_path.relative_to(base_dir)),
-                                i,
-                            )
-                except (OSError, UnicodeDecodeError):
-                    continue
+        nvim_dir = base_dir / cfg.get("path", ".config/nvim")
+        desc_locations = build_desc_index(nvim_dir, base_dir)
 
-    bindings = []
-    truncate = cfg.get("truncate", 60)
-    output = result.stderr or result.stdout
-    for line in output.strip().split("\n"):
-        if not line or "|" not in line:
-            continue
-        parts = line.split("|", 1)
-        if len(parts) >= 2:
-            key, desc = parts[0], parts[1]
-            # Find source location from desc - skip plugin bindings without source
-            if desc not in desc_locations:
-                continue
-            src, line_num = desc_locations[desc]
-            if truncate and len(desc) > truncate:
-                desc = desc[:truncate]
-            bindings.append(Binding("nvim", key, desc, src, line_num))
-    return bindings
+    return bindings_from_keymap_output(
+        result.stderr or result.stdout,
+        desc_locations,
+        cfg.get("truncate", 60),
+        missed,
+    )
 
 
 def _get_line_number(content: str, pos: int) -> int:
@@ -459,7 +500,11 @@ def parse_all(
     for engine in query_engines:
         if engine == "nvim":
             nvim_cfg = engine_configs.get("nvim", {})
-            all_results.extend(query_nvim_keymaps(nvim_cfg, base_dir))
+            all_results.extend(
+                query_nvim_keymaps(
+                    nvim_cfg, base_dir, all_missed if collect_missed else None
+                )
+            )
         elif engine == "tmuxinator":
             tmux_cfg = engine_configs.get("tmuxinator", {})
             all_results.extend(query_tmuxinator_sessions(tmux_cfg, base_dir))
