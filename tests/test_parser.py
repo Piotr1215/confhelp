@@ -1032,3 +1032,60 @@ class TestTmuxinatorEngine:
         (sessions / "good.yml").write_text("name: good\nroot: ~/\n")
 
         assert [b.key for b in query_tmuxinator_sessions({"path": str(sessions)})] == ["good"]
+
+
+class TestStructuredDottedFields:
+    """Nested fields, e.g. alacritty's binding = { key, mods } under hints.enabled."""
+
+    CFG = {"parser": "toml", "binding_path": "hints.enabled",
+           "key": "binding.mods+binding.key", "desc": "command.program", "type": "hint"}
+
+    def test_dotted_key_and_desc_reach_nested_values(self, temp_dir):
+        f = temp_dir / "alacritty.toml"
+        f.write_text(
+            "[[hints.enabled]]\n"
+            'command = { program = "/bin/sh", args = ["-c", "true"] }\n'
+            'binding = { key = "1", mods = "Control" }\n'
+        )
+
+        result, _ = parse_file(f, self.CFG, "alacritty.toml")
+
+        assert result[0].key == "Control+1"
+        assert result[0].desc == "/bin/sh"
+
+    def test_flat_fields_still_work(self, temp_dir):
+        """The dotted lookup must not regress the ordinary single-level case."""
+        f = temp_dir / "alacritty.toml"
+        f.write_text('[[keyboard.bindings]]\nkey = "Y"\nmods = "Control"\naction = "Copy"\n')
+
+        cfg = {"parser": "toml", "binding_path": "keyboard.bindings",
+               "key": "mods+key", "desc": "action", "type": "key"}
+        result, _ = parse_file(f, cfg, "alacritty.toml")
+
+        assert result[0].key == "Control+Y"
+        assert result[0].desc == "Copy"
+
+    def test_absent_nested_field_is_empty_not_an_error(self, temp_dir):
+        f = temp_dir / "alacritty.toml"
+        f.write_text('[[hints.enabled]]\nbinding = { key = "1" }\n')
+
+        result, _ = parse_file(f, self.CFG, "alacritty.toml")
+
+        assert result[0].key == "1"
+        assert result[0].desc == ""
+
+
+class TestPipeEscaping:
+    """The output row is pipe-delimited and consumers split on it with awk."""
+
+    def test_a_pipe_in_the_key_is_escaped(self):
+        """alacritty spells a modifier combination Shift|Control."""
+        line = Binding("alacritty", "Shift|Control+Space", "ToggleViMode", "a.toml", 3).to_line()
+
+        assert line.count("|") == 3, line
+        assert "Shift¦Control+Space" in line
+
+    def test_a_pipe_in_the_desc_is_escaped(self):
+        line = Binding("tmux", "M-x", "sh -c 'a | b'", "t.conf", 9).to_line()
+
+        assert line.count("|") == 3, line
