@@ -27,7 +27,12 @@ class Binding:
     line: int
 
     def to_line(self) -> str:
-        return f"[{self.type}]|{self.key}|{self.desc.replace('|', '¦')}|{self.file}:{self.line}"
+        # Both key and desc are escaped: alacritty spells a modifier combination
+        # Shift|Control, which would otherwise split into two extra columns and
+        # shift every field right for the awk consumers.
+        key = self.key.replace("|", "¦")
+        desc = self.desc.replace("|", "¦")
+        return f"[{self.type}]|{key}|{desc}|{self.file}:{self.line}"
 
 
 @dataclass
@@ -171,15 +176,17 @@ def _parse_file_structured(
     # Optional: combine multiple fields for key or desc
     # If key/desc contains "+" it means combine fields: "mods+key"
     def extract_field(entry: dict, field_spec: str) -> str:
+        # Fields may be dotted so a nested value can be named directly. Alacritty
+        # spells a hint as binding = { key, mods } with command = { program, args },
+        # and a flat entry.get() reaches neither.
+        def one(spec: str) -> str:
+            val = _navigate_path(entry, spec.strip())
+            return "" if val is None else str(val)
+
         if "+" in field_spec:
-            parts = field_spec.split("+")
-            values = []
-            for p in parts:
-                val = entry.get(p.strip(), "")
-                if val:
-                    values.append(str(val))
+            values = [v for v in (one(p) for p in field_spec.split("+")) if v]
             return "+".join(values) if values else ""
-        return str(entry.get(field_spec, ""))
+        return one(field_spec)
 
     results = []
     last_line = 1
