@@ -61,12 +61,15 @@ confhelp --check
 Example output:
 
 ```
-[tmux]   prefix+g   display-popup -w 80%...   .tmux.conf:42
-[alias]  gs         git status                .zsh_aliases:15
-[bind]   ^[e        edit-command-line         .zshrc:89
+[tmux]   M-g (alt+g)           display-popup -w 80%...   .tmux.conf:42
+[alias]  gs                    git status                .zsh_aliases:15
+[zsh]    M-S-g (alt+shift+g)   execute_and_claude        .zshrc:89
+[nvim]   C-p (ctrl+p)          Find files                lua/mappings.lua:12
 ```
 
 The `--edit` flag drops you directly into the file at the exact line. Change the binding, save, done.
+
+Keys read the same whatever tool defined them. zsh writes alt+shift+g as `^[G`, vim as `<M-G>`, Claude Code as `meta+shift+g`; confhelp shows all of them as `M-S-g (alt+shift+g)`, so searching `m-s-g` or `alt+shift+g` finds the key in any source. See [Key notation](#key-notation).
 
 ## Binding Sources
 
@@ -158,6 +161,7 @@ regex = 'bind(?:-key)?\s+(?:-n\s+)?(\S+)(.*)'
 key_group = 1
 desc_group = 2
 type = "tmux"
+notation = "tmux"  # show keys as M-S-g (alt+shift+g), see Key notation
 truncate = 100
 
 # zsh alias: alias [-gs] <name>=<command>
