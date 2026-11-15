@@ -42,6 +42,8 @@ class MissedLine:
     reason "regex" is a source line that matched match_line but failed the regex.
     reason "no-source" is a runtime binding a query engine found but could not
     trace back to a config file, so it was dropped from the listing.
+    reason "unreadable" is a whole file that is not UTF-8, such as a git-crypt
+    file left encrypted on disk, so none of its bindings could be read.
     """
     file: str
     line: int
@@ -250,7 +252,7 @@ def query_tmuxinator_sessions(cfg: dict, base_dir: Optional[Path] = None) -> lis
                 yml_file.name,
                 line_num
             ))
-        except (OSError, yaml.YAMLError):
+        except (OSError, UnicodeDecodeError, yaml.YAMLError):
             continue
 
     return bindings
@@ -421,10 +423,28 @@ def parse_file(
     """Parse a single file according to config.
 
     Returns (bindings, missed_lines). missed_lines is empty unless collect_missed=True.
+    A file that is not UTF-8 yields no bindings rather than aborting the whole run.
     """
     if not path.exists():
         return [], []
 
+    try:
+        return _parse_file(path, cfg, rel_path, collect_missed, parser_name)
+    except UnicodeDecodeError:
+        fname = rel_path if rel_path else path.name
+        missed = [MissedLine(fname, 0, "not UTF-8 (git-crypt locked?)", parser_name,
+                             reason="unreadable")] if collect_missed else []
+        return [], missed
+
+
+def _parse_file(
+    path: Path,
+    cfg: dict,
+    rel_path: Optional[str],
+    collect_missed: bool,
+    parser_name: str,
+) -> tuple[list[Binding], list[MissedLine]]:
+    """parse_file for a file that exists; may raise UnicodeDecodeError."""
     fname = rel_path if rel_path else path.name
 
     # Structured parser mode: parse TOML/YAML/JSON files

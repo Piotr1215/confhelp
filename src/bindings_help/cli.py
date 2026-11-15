@@ -161,6 +161,13 @@ def main():
             sys.exit(0)
         unparsed = [m for m in all_missed if m.reason == "regex"]
         dropped = [m for m in all_missed if m.reason == "no-source"]
+        unreadable = [m for m in all_missed if m.reason == "unreadable"]
+
+        if unreadable:
+            print(f"Skipped {len(unreadable)} unreadable file(s):\n", file=sys.stderr)
+            for m in unreadable:
+                print(f"[{m.parser_name}] {m._base_dir / m.file}  {m.content}")
+            print()
 
         if unparsed:
             print(f"Found {len(unparsed)} unparsed line(s):\n", file=sys.stderr)
