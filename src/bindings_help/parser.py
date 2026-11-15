@@ -16,6 +16,8 @@ else:
 from pathlib import Path
 from typing import Any, Optional
 
+from .keys import normalize_key
+
 
 @dataclass
 class Binding:
@@ -527,11 +529,12 @@ def parse_all(
     for engine in query_engines:
         if engine == "nvim":
             nvim_cfg = engine_configs.get("nvim", {})
-            all_results.extend(
+            all_results.extend(_with_notation(
                 query_nvim_keymaps(
                     nvim_cfg, base_dir, all_missed if collect_missed else None
-                )
-            )
+                ),
+                nvim_cfg.get("notation", "vim"),
+            ))
         elif engine == "tmuxinator":
             tmux_cfg = engine_configs.get("tmuxinator", {})
             all_results.extend(query_tmuxinator_sessions(tmux_cfg, base_dir))
@@ -553,13 +556,13 @@ def parse_all(
                             results, missed = parse_file(
                                 path, cfg, str(path), collect_missed, name
                             )
-                            all_results.extend(results)
+                            all_results.extend(_with_notation(results, cfg.get("notation")))
                             all_missed.extend(missed)
                 elif expanded.exists():
                     results, missed = parse_file(
                         expanded, cfg, str(expanded), collect_missed, name
                     )
-                    all_results.extend(results)
+                    all_results.extend(_with_notation(results, cfg.get("notation")))
                     all_missed.extend(missed)
             # Support glob patterns
             elif "*" in rel_path:
@@ -569,15 +572,24 @@ def parse_all(
                         results, missed = parse_file(
                             path, cfg, file_rel, collect_missed, name
                         )
-                        all_results.extend(results)
+                        all_results.extend(_with_notation(results, cfg.get("notation")))
                         all_missed.extend(missed)
             else:
                 path = base_dir / rel_path
                 results, missed = parse_file(path, cfg, rel_path, collect_missed, name)
-                all_results.extend(results)
+                all_results.extend(_with_notation(results, cfg.get("notation")))
                 all_missed.extend(missed)
 
     return all_results, all_missed
+
+
+def _with_notation(bindings: list[Binding], notation: Optional[str]) -> list[Binding]:
+    """Rewrite each key into the canonical "M-S-g (alt+shift+g)" form."""
+    if not notation:
+        return bindings
+    for b in bindings:
+        b.key = normalize_key(b.key, notation)
+    return bindings
 
 
 def find_conflicts(bindings: list[Binding]) -> dict[tuple[str, str], list[Binding]]:

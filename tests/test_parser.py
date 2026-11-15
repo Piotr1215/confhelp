@@ -152,6 +152,33 @@ abbrevs=(
 
 
 class TestParseAll:
+    def test_notation_normalizes_keys_and_its_absence_leaves_them(self, temp_dir):
+        """^[G was unsearchable as m-s-g or alt+shift+g until keys were normalized."""
+        config_toml = temp_dir / "config.toml"
+        config_toml.write_text("""
+[zsh-bindkey]
+paths = [".zshrc"]
+regex = "bindkey\\\\s+'([^']+)'\\\\s+(\\\\S+)"
+key_group = 1
+desc_group = 2
+type = "zsh"
+notation = "zsh"
+
+[plain]
+paths = [".zshrc"]
+regex = "bindkey\\\\s+'([^']+)'"
+key_group = 1
+type = "raw"
+""")
+        (temp_dir / ".zshrc").write_text("bindkey '^[G' execute_and_claude\n")
+
+        results, _ = parse_all(config_toml, temp_dir)
+
+        assert {(b.type, b.key) for b in results} == {
+            ("zsh", "M-S-g (alt+shift+g)"),
+            ("raw", "^[G"),
+        }
+
     def test_parse_multiple_files(self, temp_dir):
         config_toml = temp_dir / "config.toml"
         config_toml.write_text("""
