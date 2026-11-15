@@ -16,6 +16,8 @@ else:
 from pathlib import Path
 from typing import Any, Optional
 
+from .keys import normalize_key
+
 
 @dataclass
 class Binding:
@@ -42,6 +44,8 @@ class MissedLine:
     reason "regex" is a source line that matched match_line but failed the regex.
     reason "no-source" is a runtime binding a query engine found but could not
     trace back to a config file, so it was dropped from the listing.
+    reason "unreadable" is a whole file that is not UTF-8, such as a git-crypt
+    file left encrypted on disk, so none of its bindings could be read.
     """
     file: str
     line: int
@@ -250,7 +254,7 @@ def query_tmuxinator_sessions(cfg: dict, base_dir: Optional[Path] = None) -> lis
                 yml_file.name,
                 line_num
             ))
-        except (OSError, yaml.YAMLError):
+        except (OSError, UnicodeDecodeError, yaml.YAMLError):
             continue
 
     return bindings
@@ -421,10 +425,28 @@ def parse_file(
     """Parse a single file according to config.
 
     Returns (bindings, missed_lines). missed_lines is empty unless collect_missed=True.
+    A file that is not UTF-8 yields no bindings rather than aborting the whole run.
     """
     if not path.exists():
         return [], []
 
+    try:
+        return _parse_file(path, cfg, rel_path, collect_missed, parser_name)
+    except UnicodeDecodeError:
+        fname = rel_path if rel_path else path.name
+        missed = [MissedLine(fname, 0, "not UTF-8 (git-crypt locked?)", parser_name,
+                             reason="unreadable")] if collect_missed else []
+        return [], missed
+
+
+def _parse_file(
+    path: Path,
+    cfg: dict,
+    rel_path: Optional[str],
+    collect_missed: bool,
+    parser_name: str,
+) -> tuple[list[Binding], list[MissedLine]]:
+    """parse_file for a file that exists; may raise UnicodeDecodeError."""
     fname = rel_path if rel_path else path.name
 
     # Structured parser mode: parse TOML/YAML/JSON files
@@ -507,11 +529,12 @@ def parse_all(
     for engine in query_engines:
         if engine == "nvim":
             nvim_cfg = engine_configs.get("nvim", {})
-            all_results.extend(
+            all_results.extend(_with_notation(
                 query_nvim_keymaps(
                     nvim_cfg, base_dir, all_missed if collect_missed else None
-                )
-            )
+                ),
+                nvim_cfg.get("notation", "vim"),
+            ))
         elif engine == "tmuxinator":
             tmux_cfg = engine_configs.get("tmuxinator", {})
             all_results.extend(query_tmuxinator_sessions(tmux_cfg, base_dir))
@@ -533,13 +556,13 @@ def parse_all(
                             results, missed = parse_file(
                                 path, cfg, str(path), collect_missed, name
                             )
-                            all_results.extend(results)
+                            all_results.extend(_with_notation(results, cfg.get("notation")))
                             all_missed.extend(missed)
                 elif expanded.exists():
                     results, missed = parse_file(
                         expanded, cfg, str(expanded), collect_missed, name
                     )
-                    all_results.extend(results)
+                    all_results.extend(_with_notation(results, cfg.get("notation")))
                     all_missed.extend(missed)
             # Support glob patterns
             elif "*" in rel_path:
@@ -549,15 +572,24 @@ def parse_all(
                         results, missed = parse_file(
                             path, cfg, file_rel, collect_missed, name
                         )
-                        all_results.extend(results)
+                        all_results.extend(_with_notation(results, cfg.get("notation")))
                         all_missed.extend(missed)
             else:
                 path = base_dir / rel_path
                 results, missed = parse_file(path, cfg, rel_path, collect_missed, name)
-                all_results.extend(results)
+                all_results.extend(_with_notation(results, cfg.get("notation")))
                 all_missed.extend(missed)
 
     return all_results, all_missed
+
+
+def _with_notation(bindings: list[Binding], notation: Optional[str]) -> list[Binding]:
+    """Rewrite each key into the canonical "M-S-g (alt+shift+g)" form."""
+    if not notation:
+        return bindings
+    for b in bindings:
+        b.key = normalize_key(b.key, notation)
+    return bindings
 
 
 def find_conflicts(bindings: list[Binding]) -> dict[tuple[str, str], list[Binding]]:

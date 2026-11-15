@@ -226,6 +226,7 @@ type = "nvim"
 | `strip_quotes` | Remove surrounding quotes from desc |
 | `desc_literal` | Use fixed string as description |
 | `desc_from_comment` | Extract desc from trailing `# comment` |
+| `notation` | Rewrite keys into one form, see [Key notation](#key-notation) |
 
 **Section options (structured parsing):**
 
@@ -238,6 +239,27 @@ type = "nvim"
 | `desc` | Field name for description |
 | `type` | Binding type label |
 | `truncate` | Max length for description |
+| `notation` | Rewrite keys into one form, see [Key notation](#key-notation) |
+
+### Key notation
+
+Every tool spells a key its own way: alt+shift+g is `^[G` in zsh, `M-G` in tmux, `<M-G>` in vim and `meta+shift+g` in Claude Code. A search for one spelling misses the others. Set `notation` on a section and its keys are rewritten into one form, the short M/C/S notation followed by the spelled-out words:
+
+```
+^[G          ->  M-S-g (alt+shift+g)
+^[[1;5C      ->  C-Right (ctrl+right)
+<C-P>        ->  C-p (ctrl+p)
+ctrl+shift+b ->  C-S-b (ctrl+shift+b)
+```
+
+| Value | Reads |
+|-------|-------|
+| `zsh` | bindkey strings: `^X`, `^[x`, `\e`, xterm `^[[1;5C` sequences |
+| `tmux` | `M-x`, `C-M-x`; an uppercase letter means shift |
+| `vim` | `<C-x>`, `<M-x>`, `<A-x>`, with `<leader>` kept as is (the nvim engine default) |
+| `plus` | `ctrl+x`, `ctrl-x`, `Control+X`, `Shift\|Control+X` and `M-x`; letters ignore case |
+
+A key that does not parse is shown unchanged. Sections without `notation` are left as they are.
 
 ### Regex Tips
 
